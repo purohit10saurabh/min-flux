@@ -1,3 +1,19 @@
+"""
+Minimal Flux (FLUX.1) training loop — the complete training algorithm.
+
+References (source of truth):
+1) diffusers training utilities — compute_density_for_timestep_sampling, compute_loss_weighting_for_sd3:
+   https://github.com/huggingface/diffusers/blob/main/src/diffusers/training_utils.py
+2) diffusers dreambooth LoRA Flux training example — training step structure, get_sigmas:
+   https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux.py
+3) diffusers FluxPipeline — _pack_latents, _unpack_latents, _prepare_latent_image_ids:
+   https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux/pipeline_flux.py
+4) diffusers FluxTransformer2DModel — forward() signature and timestep*1000 convention:
+   https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/transformers/transformer_flux.py
+5) SD3 paper (Esser et al., 2024) — rectified flow, weighting schemes:
+   https://arxiv.org/abs/2403.03206
+"""
+
 import math
 import torch
 from typing import Optional, Union
@@ -146,8 +162,6 @@ def flux_training_loop(
     optimizer,
     lr_scheduler,
     train_dataloader,
-    text_encoders,
-    tokenizers,
     accelerator,
     num_epochs: int,
     weight_dtype: torch.dtype = torch.bfloat16,

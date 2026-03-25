@@ -250,6 +250,45 @@ These choices follow state-of-the-art practices from the SD3 paper and enable hi
 
 ---
 
+## Source of Truth
+
+Every function in `flux_training_loop.py` maps to a canonical diffusers source. Verified against the local checkout at `diffusers/` and the upstream repository.
+
+### Canonical Source Files
+
+| Short Name | Full Path |
+|------------|-----------|
+| `training_utils` | `diffusers/src/diffusers/training_utils.py` |
+| `dreambooth_flux` | `diffusers/examples/dreambooth/train_dreambooth_lora_flux.py` |
+| `pipeline_flux` | `diffusers/src/diffusers/pipelines/flux/pipeline_flux.py` |
+| `transformer_flux` | `diffusers/src/diffusers/models/transformers/transformer_flux.py` |
+
+### Line-by-Line Mapping
+
+| min-flux function / block | Lines | Canonical Source | Source Lines | Verdict |
+|---------------------------|-------|------------------|--------------|---------|
+| `compute_density_for_timestep_sampling` | 19-36 | `training_utils` | 360-384 | EXACT MATCH |
+| `compute_loss_weighting_for_sd3` | 39-47 | `training_utils` | 387-402 | EXACT MATCH |
+| `get_sigmas` | 50-58 | `dreambooth_flux` (inner fn) | 1678-1687 | MATCH (refactored from closure) |
+| VAE encode + shift/scale | 82-84 | `dreambooth_flux` | 1744-1748 | EXACT MATCH |
+| `_prepare_latent_image_ids` call | 86-93 | `dreambooth_flux` calling `pipeline_flux` | 1750-1758 / 506-518 | EXACT MATCH |
+| Timestep sampling (u -> indices -> timesteps) | 98-106 | `dreambooth_flux` | 1763-1773 | EXACT MATCH |
+| Noise interpolation `(1-σ)*x + σ*ε` | 108-109 | `dreambooth_flux` | 1775-1778 | EXACT MATCH |
+| `_pack_latents` call | 111-117 | `dreambooth_flux` calling `pipeline_flux` | 1780-1786 / 520-526 | EXACT MATCH |
+| Guidance embedding | 119-121 | `dreambooth_flux` | 1788-1793 | MINOR DIFF: no `unwrap_model` |
+| Transformer forward | 123-132 | `dreambooth_flux` + `transformer_flux` forward | 1795-1806 / 637-653 | EXACT MATCH |
+| `_unpack_latents` call | 134-139 | `dreambooth_flux` calling `pipeline_flux` | 1807-1812 / 528-542 | EXACT MATCH |
+| Loss weighting + target + MSE | 141-144 | `dreambooth_flux` | 1814-1840 | EXACT MATCH (minus prior_preservation) |
+| Optimizer step | 146-151 | Standard Accelerate pattern | N/A | CORRECT |
+
+### Notes
+
+- **`timestep / 1000`**: The transformer internally multiplies by 1000 (`transformer_flux.py` line 688). The division before calling and multiplication inside cancel out, preserving the original timestep value for the sinusoidal embedding.
+- **Guidance**: Diffusers uses `unwrap_model(transformer).config.guidance_embeds` for FSDP/DeepSpeed compatibility. This minimal version accesses `transformer.config` directly (single-GPU only).
+- **Prior preservation**: Diffusers dreambooth supports `with_prior_preservation` loss chunking (lines 1821-1844). Omitted here for minimality.
+
+---
+
 ## References
 
 1. Lipman, Y., Chen, R. T., Ben-Hamu, H., Nickel, M., & Le, M. (2023). Flow Matching for Generative Modeling. ICLR 2023. https://arxiv.org/abs/2210.02747

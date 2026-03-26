@@ -252,7 +252,7 @@ These choices follow state-of-the-art practices from the SD3 paper and enable hi
 
 ## Source of Truth
 
-Every function in `flux_training_loop.py` maps to a canonical diffusers source. Verified against the local checkout at `diffusers/` and the upstream repository.
+Every function in `flux1/training_loop.py` maps to a canonical diffusers source. Shared utilities live in `shared/training_utils.py`. Verified against the `diffusers` repo source code.
 
 ### Canonical Source Files
 

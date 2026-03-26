@@ -1,7 +1,7 @@
 """
 Minimal Flux2 (FLUX.2) training loop — the complete training algorithm.
 
-Key differences from FLUX.1 (flux_training_loop.py):
+Key differences from FLUX.1 (flux1/training_loop.py):
 - VAE: AutoencoderKLFlux2 with BatchNorm normalization (not shift_factor/scaling_factor)
 - Latents: patchified (2x2) then flattened (not 2x2-patch-rearranged in one step)
 - Position IDs: 4D (T, H, W, L) not 3D (ch, H, W)
@@ -23,7 +23,7 @@ References (source of truth):
 
 import torch
 
-from flux_training_loop import (
+from shared.training_utils import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     get_sigmas,
@@ -67,22 +67,11 @@ def prepare_text_ids(prompt_embeds: torch.Tensor) -> torch.Tensor:
 
 
 def flux2_training_step(
-    transformer,
-    vae,
-    noise_scheduler,
-    optimizer,
-    lr_scheduler,
-    pixel_values: torch.Tensor,
-    prompt_embeds: torch.Tensor,
-    text_ids: torch.Tensor,
-    accelerator,
-    weight_dtype: torch.dtype,
-    weighting_scheme: str = "none",
-    logit_mean: float = 0.0,
-    logit_std: float = 1.0,
-    mode_scale: float = 1.29,
-    guidance_scale: float = 2.5,
-    max_grad_norm: float = 1.0,
+    transformer, vae, noise_scheduler, optimizer, lr_scheduler,
+    pixel_values: torch.Tensor, prompt_embeds: torch.Tensor, text_ids: torch.Tensor,
+    accelerator, weight_dtype: torch.dtype, weighting_scheme: str = "none",
+    logit_mean: float = 0.0, logit_std: float = 1.0, mode_scale: float = 1.29,
+    guidance_scale: float = 2.5, max_grad_norm: float = 1.0,
 ):
     model_input = vae.encode(pixel_values.to(dtype=vae.dtype)).latent_dist.sample()
     model_input = patchify_latents(model_input)
@@ -98,11 +87,8 @@ def flux2_training_step(
     bsz = model_input.shape[0]
 
     u = compute_density_for_timestep_sampling(
-        weighting_scheme=weighting_scheme,
-        batch_size=bsz,
-        logit_mean=logit_mean,
-        logit_std=logit_std,
-        mode_scale=mode_scale,
+        weighting_scheme=weighting_scheme, batch_size=bsz,
+        logit_mean=logit_mean, logit_std=logit_std, mode_scale=mode_scale,
     )
     indices = (u * noise_scheduler.config.num_train_timesteps).long()
     timesteps = noise_scheduler.timesteps[indices].to(device=model_input.device)
@@ -115,13 +101,8 @@ def flux2_training_step(
     guidance = torch.full([1], guidance_scale, device=accelerator.device, dtype=torch.float32).expand(bsz)
 
     model_pred = transformer(
-        hidden_states=packed_noisy_model_input,
-        timestep=timesteps / 1000,
-        guidance=guidance,
-        encoder_hidden_states=prompt_embeds,
-        txt_ids=text_ids,
-        img_ids=latent_ids,
-        return_dict=False,
+        hidden_states=packed_noisy_model_input, timestep=timesteps / 1000, guidance=guidance,
+        encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids, return_dict=False,
     )[0]
 
     model_pred = unpack_latents(model_pred, model_input.shape[2], model_input.shape[3])
@@ -142,18 +123,10 @@ def flux2_training_step(
 
 
 def flux2_training_loop(
-    transformer,
-    vae,
-    noise_scheduler,
-    optimizer,
-    lr_scheduler,
-    train_dataloader,
-    accelerator,
-    num_epochs: int,
-    weight_dtype: torch.dtype = torch.bfloat16,
-    weighting_scheme: str = "none",
-    guidance_scale: float = 2.5,
-    max_grad_norm: float = 1.0,
+    transformer, vae, noise_scheduler, optimizer, lr_scheduler,
+    train_dataloader, accelerator, num_epochs: int,
+    weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",
+    guidance_scale: float = 2.5, max_grad_norm: float = 1.0,
 ):
     from tqdm import tqdm
 
@@ -165,43 +138,18 @@ def flux2_training_loop(
         for batch in train_dataloader:
             with accelerator.accumulate(transformer):
                 loss = flux2_training_step(
-                    transformer=transformer,
-                    vae=vae,
-                    noise_scheduler=noise_scheduler,
-                    optimizer=optimizer,
-                    lr_scheduler=lr_scheduler,
-                    pixel_values=batch["pixel_values"],
-                    prompt_embeds=batch["prompt_embeds"],
-                    text_ids=batch["text_ids"],
-                    accelerator=accelerator,
-                    weight_dtype=weight_dtype,
-                    weighting_scheme=weighting_scheme,
-                    guidance_scale=guidance_scale,
-                    max_grad_norm=max_grad_norm,
+                    transformer=transformer, vae=vae, noise_scheduler=noise_scheduler,
+                    optimizer=optimizer, lr_scheduler=lr_scheduler,
+                    pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
+                    text_ids=batch["text_ids"], accelerator=accelerator, weight_dtype=weight_dtype,
+                    weighting_scheme=weighting_scheme, guidance_scale=guidance_scale, max_grad_norm=max_grad_norm,
                 )
 
             if accelerator.sync_gradients:
                 progress_bar.update(1)
                 global_step += 1
-
             progress_bar.set_postfix(loss=loss)
 
         progress_bar.close()
 
     return global_step
-
-
-if __name__ == "__main__":
-    print("Flux2 Training Loop Module")
-    print("=" * 40)
-    print("\nKey differences from FLUX.1:")
-    print("- VAE: AutoencoderKLFlux2 with BatchNorm (not shift_factor/scaling_factor)")
-    print("- Latents: patchify (2x2) -> BN normalize -> flatten pack")
-    print("- Position IDs: 4D (T, H, W, L) not 3D (ch, H, W)")
-    print("- Transformer: no pooled_projections, guidance always on")
-    print("- Text encoder: Mistral3 (not CLIP+T5)")
-    print("\nShared with FLUX.1:")
-    print("- Flow Matching Loss: target = noise - model_input")
-    print("- Noisy Input: z_t = (1 - sigma) * x + sigma * noise")
-    print("- Timestep sampling: logit_normal, mode, uniform")
-    print("- Loss weighting: sigma_sqrt, cosmap, uniform")

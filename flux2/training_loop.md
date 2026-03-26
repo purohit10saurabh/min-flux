@@ -122,7 +122,7 @@ The flow matching objective is identical:
 - **Timestep sampling**: `logit_normal`, `mode`, or uniform
 - **Loss weighting**: `sigma_sqrt`, `cosmap`, or uniform
 
-These are imported from `flux_training_loop.py` (DRY).
+These are imported from `shared/training_utils.py`.
 
 ---
 

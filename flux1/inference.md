@@ -1,8 +1,8 @@
-# Flux Inference Loop Documentation
+# Flux Inference Documentation
 
 ## Overview
 
-This document explains the FLUX.1 inference (sampling) loop — the reverse process that generates images from noise.
+This document explains the FLUX.1 inference (sampling) — the reverse process that generates images from noise.
 
 ## Key Concepts
 
@@ -45,14 +45,14 @@ This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from `https
 
 ### Line-by-Line Mapping
 
-| min-flux function / block | Canonical Source | Source Lines | Verdict |
+| minFLUX function / block | Canonical Source | Source Lines | Verdict |
 |---------------------------|------------------|--------------|---------|
 | `calculate_shift` | `pipeline_flux.calculate_shift` | 74-84 | EXACT MATCH |
 | `get_sigmas` (linspace + exp(mu) shift + append 0) | BFL `sampling.time_shift` + `sampling.get_schedule` | 277-305 | MATCH (inlined, rearranged) |
 | `euler_step` | `scheduler.step` | 507-508 | EXACT MATCH (Euler ODE step distilled to one line) |
 | Latent preparation (randn + pack) | `pipeline_flux.prepare_latents` | 544-597 | MATCH (simplified) |
 | `_prepare_latent_image_ids` call | `pipeline_flux._prepare_latent_image_ids` | 506-518 | EXACT MATCH |
-| Transformer forward kwargs | `pipeline_flux.__call__` denoise loop | 949-961 | EXACT MATCH (minus cache_context) |
+| Transformer forward kwargs | `pipeline_flux.__call__` denoise | 949-961 | EXACT MATCH (minus cache_context) |
 | `timestep / 1000` convention | `transformer_flux.forward` | 688 | CORRECT (transformer does `* 1000` internally) |
 | Unpack + inverse normalize + VAE decode | `pipeline_flux.__call__` | 1009-1012 | EXACT MATCH |
 

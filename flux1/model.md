@@ -67,7 +67,7 @@ Input: hidden_states (B, seq, 64) + encoder_hidden_states (B, txt_seq, 4096)
 
 ### Line-by-Line Mapping
 
-| min-flux class | Canonical Source | Source Lines | Verdict |
+| minFLUX class | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
 | `get_timestep_embedding` | `embeddings.get_timestep_embedding` | 26-77 | MATCH (simplified, flip_sin_to_cos=True hardcoded) |
 | `TimestepEmbedding` | `embeddings.TimestepEmbedding` | 1261-1306 | MATCH (stripped cond_proj, post_act) |

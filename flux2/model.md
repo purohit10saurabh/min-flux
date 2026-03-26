@@ -34,7 +34,7 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 ### Line-by-Line Mapping
 
 
-| min-flux class                     | Canonical Source                                                                  | Source Lines     | Verdict                                         |
+| minFLUX class                     | Canonical Source                                                                  | Source Lines     | Verdict                                         |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------- |
 | `get_timestep_embedding`           | `embeddings.get_timestep_embedding`                                               | 26-77            | MATCH (simplified)                              |
 | `TimestepEmbedding`                | `embeddings.TimestepEmbedding`                                                    | 1261-1306        | MATCH (bias=False)                              |

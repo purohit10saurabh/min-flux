@@ -1,8 +1,8 @@
-# Flux2 Training Loop Documentation
+# Flux2 Training Documentation
 
 ## Overview
 
-This document explains the FLUX.2 training loop, how it differs from FLUX.1, and maps every code block to its canonical diffusers source.
+This document explains FLUX.2 training, how it differs from FLUX.1, and maps every code block to its canonical diffusers source.
 
 ## Key Papers
 
@@ -38,7 +38,7 @@ This document explains the FLUX.2 training loop, how it differs from FLUX.1, and
 
 ---
 
-## Training Loop Components
+## Training Components
 
 ### 1. VAE Encoding + BatchNorm Normalization
 
@@ -139,7 +139,7 @@ These are imported from `shared/training_utils.py`.
 
 ### Line-by-Line Mapping
 
-| min-flux function / block | Lines | Canonical Source | Source Lines | Verdict |
+| minFLUX function / block | Lines | Canonical Source | Source Lines | Verdict |
 |---------------------------|-------|------------------|--------------|---------|
 | `patchify_latents` | 37-40 | `pipeline_flux2._patchify_latents` | 457-462 | EXACT MATCH |
 | `unpatchify_latents` | 43-46 | `pipeline_flux2._unpatchify_latents` | 465-470 | EXACT MATCH |
@@ -149,13 +149,13 @@ These are imported from `shared/training_utils.py`.
 | `prepare_text_ids` | 65-68 | `pipeline_flux2._prepare_text_ids` | 356-372 | MATCH (simplified) |
 | VAE encode + patchify + BN | 82-89 | `pipeline_flux2._encode_vae_image` | 606-617 | MATCH (`.sample()` for training vs `.mode()` for inference) |
 | Position ID preparation | 91 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
-| Timestep sampling | 96-103 | `training_utils.compute_density_for_timestep_sampling` | 360-384 | IMPORTED from flux_training_loop |
+| Timestep sampling | 96-103 | `training_utils.compute_density_for_timestep_sampling` | 360-384 | IMPORTED from flux_training |
 | Noise interpolation | 105-106 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
 | Pack noisy input | 108 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
 | Guidance (always on) | 110 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |
-| Transformer forward | 112-120 | `pipeline_flux2.__call__` denoise loop | 971-980 | EXACT MATCH (no `pooled_projections`) |
+| Transformer forward | 112-120 | `pipeline_flux2.__call__` denoise | 971-980 | EXACT MATCH (no `pooled_projections`) |
 | Unpack model prediction | 122 | Inverse of pack (training only) | N/A | DERIVED |
-| Loss computation | 124-127 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from flux_training_loop |
+| Loss computation | 124-127 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from flux_training |
 
 ### Notes
 

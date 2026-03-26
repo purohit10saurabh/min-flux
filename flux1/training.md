@@ -1,8 +1,8 @@
-# Flux Training Loop Documentation
+# Flux Training Documentation
 
 ## Overview
 
-This document explains the Flux diffusion model training loop implementation, the theoretical foundations behind each design choice, and references to the original research papers.
+This document explains the Flux diffusion model training implementation, the theoretical foundations behind each design choice, and references to the original research papers.
 
 ## Key Papers
 
@@ -35,7 +35,7 @@ Rectified Flow:         x_t = (1-t) * x_0 + t * ε          (straight path)
 
 ---
 
-## Training Loop Components
+## Training Components
 
 ### 2. Noisy Input Construction
 
@@ -238,7 +238,7 @@ This is similar to ViT-style patch embedding but applied in latent space.
 
 ## Summary
 
-The Flux training loop implements **rectified flow matching** with:
+The Flux training implements **rectified flow matching** with:
 
 1. **Linear interpolation** between data and noise
 2. **Velocity prediction** target: `v = ε - x`
@@ -252,7 +252,7 @@ These choices follow state-of-the-art practices from the SD3 paper and enable hi
 
 ## Source of Truth
 
-Every function in `flux1/training_loop.py` maps to a canonical diffusers source. Shared utilities live in `shared/training_utils.py`. Verified against the `diffusers` repo source code.
+Every function in `flux1/training.py` maps to a canonical diffusers source. Shared utilities live in `shared/training_utils.py`. Verified against the `diffusers` repo source code.
 
 ### Canonical Source Files
 
@@ -265,7 +265,7 @@ Every function in `flux1/training_loop.py` maps to a canonical diffusers source.
 
 ### Line-by-Line Mapping
 
-| min-flux function / block | Lines | Canonical Source | Source Lines | Verdict |
+| minFLUX function / block | Lines | Canonical Source | Source Lines | Verdict |
 |---------------------------|-------|------------------|--------------|---------|
 | `compute_density_for_timestep_sampling` | 19-36 | `training_utils` | 360-384 | EXACT MATCH |
 | `compute_loss_weighting_for_sd3` | 39-47 | `training_utils` | 387-402 | EXACT MATCH |

@@ -1,7 +1,7 @@
 """
-Minimal Flux2 (FLUX.2) inference loop — the complete sampling algorithm.
+Minimal Flux2 (FLUX.2) inference — the complete sampling algorithm.
 
-Key differences from FLUX.1 (flux1/inference_loop.py):
+Key differences from FLUX.1 (flux1/inference.py):
 - VAE decode: BatchNorm de-normalization + unpatchify (not shift_factor/scaling_factor)
 - Timestep shift: compute_empirical_mu (fitted linear, not calculate_shift)
 - Position IDs: 4D (T, H, W, L) not 3D (ch, H, W)
@@ -19,8 +19,8 @@ References (source of truth):
 import numpy as np
 import torch
 
-from flux1.inference_loop import euler_step
-from flux2.training_loop import unpatchify_latents, pack_latents, prepare_latent_ids
+from flux1.inference import euler_step
+from flux2.training import unpatchify_latents, pack_latents, prepare_latent_ids
 
 
 def compute_empirical_mu(image_seq_len: int, num_steps: int) -> float:

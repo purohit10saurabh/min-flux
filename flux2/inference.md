@@ -1,4 +1,4 @@
-# Flux2 Inference Loop Documentation
+# Flux2 Inference Documentation
 
 ## Overview
 
@@ -38,13 +38,13 @@ FLUX.2's transformer does not take pooled text embeddings.
 
 ### Line-by-Line Mapping
 
-| min-flux function / block | Canonical Source | Source Lines | Verdict |
+| minFLUX function / block | Canonical Source | Source Lines | Verdict |
 |---------------------------|------------------|--------------|---------|
 | `compute_empirical_mu` | `pipeline_flux2.compute_empirical_mu` | 159-174 | EXACT MATCH |
 | `get_sigmas_flux2` (linspace + exp(mu) shift) | BFL `sampling.generalized_time_snr_shift` + `sampling.get_schedule` | 240-248 | MATCH (inlined, rearranged) |
-| `euler_step` | `scheduler.step` | 507-508 | IMPORTED from flux1/inference_loop |
+| `euler_step` | `scheduler.step` | 507-508 | IMPORTED from flux1/inference |
 | Latent preparation (randn + pack) | `pipeline_flux2.prepare_latents` | 619-650 | MATCH (simplified) |
-| `prepare_latent_ids` | `pipeline_flux2._prepare_latent_ids` | 375-404 | IMPORTED from flux2/training_loop |
+| `prepare_latent_ids` | `pipeline_flux2._prepare_latent_ids` | 375-404 | IMPORTED from flux2/training |
 | Transformer forward kwargs (no pooled_projections) | `pipeline_flux2.__call__` | 971-980 | EXACT MATCH |
 | Unpack + BN denorm + unpatchify + VAE decode | `pipeline_flux2.__call__` | 1014-1024 | EXACT MATCH |
 

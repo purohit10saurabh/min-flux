@@ -1,25 +1,25 @@
-# min-flux
+# minFLUX
 
-![min-flux](assets/flux.jpg)
-A minimal way to understand FLUX diffusion transformers. Inspired by [minGPT](https://github.com/karpathy/minGPT).
+![minFLUX](assets/flux.jpg)
+An unofficial minimal implementation of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers, like [minGPT](https://github.com/karpathy/minGPT) but for FLUX. For learning only (cannot be used with pretrained weights). Since there are numerous possible design decisions in diffusion models, the purpose of this project is to understand the key model choices in FLUX.
 
 ## Structure
 
 ```
-min-flux/
+minFLUX/
 ├── shared/                         # Dependency-free utilities (only torch + numpy)
 │   ├── training_utils.py           # Timestep sampling, loss weighting, get_sigmas
 │   ├── latent_utils.py             # Pack/unpack latents, prepare position IDs
 │   └── rotary_emb.py               # RoPE: get_1d_rotary_pos_embed, apply_rotary_emb
 ├── flux1/                          # FLUX.1 (dev/schnell)
 │   ├── model.py                    # FluxTransformer2DModel — full architecture (~300 lines)
-│   ├── training_loop.py            # Training: VAE encode -> flow matching -> velocity MSE
-│   ├── inference_loop.py           # Inference: noise -> Euler ODE denoise -> VAE decode
-│   └── kontext_training_loop.py    # Kontext: reference-image conditioned training
+│   ├── training.py                 # Training: VAE encode -> flow matching -> velocity MSE
+│   ├── inference.py                # Inference: noise -> Euler ODE denoise -> VAE decode
+│   └── kontext_training.py         # Kontext: reference-image conditioned training
 └── flux2/                          # FLUX.2
     ├── model.py                    # Flux2Transformer2DModel — SwiGLU, shared modulation (~350 lines)
-    ├── training_loop.py            # Training: patchify -> BatchNorm -> flow matching
-    └── inference_loop.py           # Inference: denoise -> BN denorm -> unpatchify -> decode
+    ├── training.py                 # Training: patchify -> BatchNorm -> flow matching
+    └── inference.py                # Inference: denoise -> BN denorm -> unpatchify -> decode
 ```
 
 Each `.py` file has a companion `.md` file, containing documentation and source-of-truth line mappings to the [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. These are to understand the implementation and verify the code.
@@ -62,4 +62,4 @@ This implementation of FLUX.1 and FLUX.2 is inferred from the diffusers repo and
 - **Simplifications**: Stripping ControlNet, IP-Adapter, gradient checkpointing, KV caching, FSDP/DeepSpeed support, and the attention processor dispatch pattern may introduce subtle incompatibilities with pretrained weights. Hence this will not work with pretrained weights. Also the minimal model classes (`flux1/model.py`, `flux2/model.py`) use different attribute names than diffusers' `FluxTransformer2DModel` / `Flux2Transformer2DModel`, so `state_dict` keys will not match directly.
 - **FLUX.2 is new**: The FLUX.2 architecture was added to diffusers recently and may still be evolving. The Flux2 files here reflect a snapshot of the codebase at the time of writing.
 
-For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) and the companion `.md` files for the canonical line mappings.
+For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) and the companion `.md` files for the line mappings.

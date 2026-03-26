@@ -1,7 +1,7 @@
 """
-Minimal Flux2 (FLUX.2) training loop — the complete training algorithm.
+Minimal Flux2 (FLUX.2) training — the complete training algorithm.
 
-Key differences from FLUX.1 (flux1/training_loop.py):
+Key differences from FLUX.1 (flux1/training.py):
 - VAE: AutoencoderKLFlux2 with BatchNorm normalization (not shift_factor/scaling_factor)
 - Latents: patchified (2x2) then flattened (not 2x2-patch-rearranged in one step)
 - Position IDs: 4D (T, H, W, L) not 3D (ch, H, W)
@@ -122,7 +122,7 @@ def flux2_training_step(
     return loss.detach().item()
 
 
-def flux2_training_loop(
+def flux2_training(
     transformer, vae, noise_scheduler, optimizer, lr_scheduler,
     train_dataloader, accelerator, num_epochs: int,
     weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",

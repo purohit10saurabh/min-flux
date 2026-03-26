@@ -1,5 +1,5 @@
 """
-Minimal Flux (FLUX.1) inference loop — the complete sampling algorithm.
+Minimal Flux (FLUX.1) inference — the complete sampling algorithm.
 
 References (source of truth):
 1) BFL flux-inference — time_shift, get_schedule, denoise:

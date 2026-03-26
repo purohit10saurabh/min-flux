@@ -1,4 +1,4 @@
-# Flux Kontext Training Loop Documentation
+# Flux Kontext Training Documentation
 
 ## Overview
 
@@ -58,7 +58,7 @@ The dataloader must provide `batch["reference_pixel_values"]` in addition to the
 
 ### Line-by-Line Mapping
 
-| min-flux block | Canonical Source | Source Lines | Verdict |
+| minFLUX block | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
 | Reference VAE encode (.mode()) | `kontext_pipeline._encode_vae_image` | 598-610 | EXACT MATCH |
 | Reference position IDs (`[..., 0] = 1`) | `kontext_pipeline.prepare_latents` | 715-720 | EXACT MATCH |

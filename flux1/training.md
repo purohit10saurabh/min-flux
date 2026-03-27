@@ -254,6 +254,12 @@ These choices follow state-of-the-art practices from the SD3 paper and enable hi
 
 Every function in `flux1/training.py` maps to a canonical diffusers source. Shared utilities live in `utils/training.py`. Verified against the `diffusers` repo source code.
 
+### Why DreamBooth as Source of Truth?
+
+Diffusers has no standalone "train Flux" script. All 12 official Flux training examples live under `examples/dreambooth/` or `examples/controlnet/`. The core library (`src/diffusers/`) provides the building blocks -- `compute_density_for_timestep_sampling` in `training_utils.py`, `_pack_latents` in `pipeline_flux.py`, `forward()` in `transformer_flux.py` -- but never assembles them into a training step. The velocity target `noise - model_input` does not appear anywhere in `src/diffusers/`, only in the example scripts.
+
+The dreambooth script is the canonical composition: VAE encode, noise interpolation, pack, transformer forward, unpack, velocity MSE. The DreamBooth-specific parts (prior preservation, class images, LoRA setup) are omitted in minFLUX. `train_dreambooth_lora_flux.py` was chosen over the other 11 scripts because it is the most widely referenced.
+
 ### Canonical Source Files
 
 | Short Name | Full Path |

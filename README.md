@@ -9,15 +9,15 @@ The `.py` files in `flux1/` and `flux2/` have companion `.md` files, containing 
 
 **Training** (rectified flow matching):
 
-$$x_\sigma = (1 - \sigma) \cdot x_0 + \sigma \cdot \epsilon \qquad \text{(noisy input)}$$
+$$x_t = (1 - \sigma(t)) \cdot x_0 + \sigma(t) \cdot \epsilon \qquad \text{(noisy input)}$$
 
 $$v = \epsilon - x_0 \qquad \text{(velocity prediction)}$$
 
-$$L = \left| f_\theta(x_\sigma, t) - v \right|^2 \qquad \text{(MSE loss)}$$
+$$L = \left\| model(x_t, t) - v \right\|^2 \qquad \text{(MSE loss)}$$
 
 **Inference** (Euler ODE step):
 
-$$x_{t-1} = x_t + (\sigma_{\text{next}} - \sigma) \cdot f_\theta(x_t, t)$$
+$$x_{t_{\text{next}}} = x_t + (\sigma(t_{\text{next}}) - \sigma(t)) \cdot model(x_t, t)$$
 
 ## Architecture
 

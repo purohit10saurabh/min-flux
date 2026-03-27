@@ -22,7 +22,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from shared.rotary_emb import apply_rotary_emb, get_1d_rotary_pos_embed
+from utils.rotary import apply_rotary_emb, get_1d_rotary_pos_embed
 
 
 # --- Sinusoidal Timestep Embeddings (embeddings.py:26-77, 1261-1306) ---

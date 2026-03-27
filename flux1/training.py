@@ -16,12 +16,12 @@ References (source of truth):
 
 import torch
 
-from shared.training_utils import (
+from utils.training import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     get_sigmas,
 )
-from shared.latent_utils import prepare_latent_image_ids, pack_latents, unpack_latents
+from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
 
 
 def flux_training_step(

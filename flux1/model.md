@@ -31,8 +31,8 @@ Input: hidden_states (B, seq, 64) + encoder_hidden_states (B, txt_seq, 4096)
 
 ### Key Design Choices
 
-- **Double-stream blocks** (FluxTransformerBlock): Text and image have separate attention norms, separate FFN paths, but share a single joint attention computation. This allows cross-modal attention while maintaining modality-specific processing.
-- **Single-stream blocks** (FluxSingleTransformerBlock): Text and image tokens are concatenated and processed together. Attention and MLP run in parallel (not sequential) and are projected out together.
+- **Double-stream blocks** ([`FluxTransformerBlock`](model.py#L199)): Text and image have separate attention norms, separate FFN paths, but share a single joint attention computation. This allows cross-modal attention while maintaining modality-specific processing.
+- **Single-stream blocks** ([`FluxSingleTransformerBlock`](model.py#L227)): Text and image tokens are concatenated and processed together. Attention and MLP run in parallel (not sequential) and are projected out together.
 - **AdaLN-Zero modulation**: Timestep + guidance + text embeddings modulate every block via shift/scale/gate parameters.
 - **RoPE**: Rotary positional embeddings applied per-axis (16+56+56 = 128 = head_dim) to queries and keys.
 

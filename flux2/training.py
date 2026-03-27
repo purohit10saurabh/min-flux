@@ -23,7 +23,7 @@ References (source of truth):
 
 import torch
 
-from shared.training_utils import (
+from utils.training import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     get_sigmas,

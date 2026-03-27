@@ -66,4 +66,4 @@ The dataloader must provide `batch["reference_pixel_values"]` in addition to the
 | Concatenate img_ids | `kontext_pipeline.__call__` | 1007-1009 | EXACT MATCH |
 | Slice output | `kontext_pipeline.__call__` | 1098 | EXACT MATCH |
 | Transformer forward kwargs | `kontext_pipeline.__call__` | 1088-1097 | EXACT MATCH |
-| All other training logic | `shared/training_utils.py` (imported) | — | INHERITED |
+| All other training logic | `utils/training.py` (imported) | — | INHERITED |

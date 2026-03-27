@@ -13,7 +13,7 @@ References (source of truth):
 import numpy as np
 import torch
 
-from shared.latent_utils import prepare_latent_image_ids, pack_latents, unpack_latents
+from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
 
 
 def calculate_shift(image_seq_len, base_seq_len=256, max_seq_len=4096, base_shift=0.5, max_shift=1.15):

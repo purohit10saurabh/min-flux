@@ -122,7 +122,7 @@ The flow matching objective is identical:
 - **Timestep sampling**: `logit_normal`, `mode`, or uniform
 - **Loss weighting**: `sigma_sqrt`, `cosmap`, or uniform
 
-These are imported from `shared/training_utils.py`.
+These are imported from `utils/training.py`.
 
 ---
 
@@ -135,7 +135,7 @@ These are imported from `shared/training_utils.py`.
 | `transformer_flux2` | `diffusers/src/diffusers/models/transformers/transformer_flux2.py` |
 | `pipeline_flux2` | `diffusers/src/diffusers/pipelines/flux2/pipeline_flux2.py` |
 | `autoencoder_flux2` | `diffusers/src/diffusers/models/autoencoders/autoencoder_kl_flux2.py` |
-| `training_utils` | `diffusers/src/diffusers/training_utils.py` |
+| `training` | `diffusers/src/diffusers/training.py` |
 
 ### Line-by-Line Mapping
 
@@ -149,7 +149,7 @@ These are imported from `shared/training_utils.py`.
 | `prepare_text_ids` | 65-68 | `pipeline_flux2._prepare_text_ids` | 356-372 | MATCH (simplified) |
 | VAE encode + patchify + BN | 82-89 | `pipeline_flux2._encode_vae_image` | 606-617 | MATCH (`.sample()` for training vs `.mode()` for inference) |
 | Position ID preparation | 91 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
-| Timestep sampling | 96-103 | `training_utils.compute_density_for_timestep_sampling` | 360-384 | IMPORTED from flux_training |
+| Timestep sampling | 96-103 | `training.compute_density_for_timestep_sampling` | 360-384 | IMPORTED from flux_training |
 | Noise interpolation | 105-106 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
 | Pack noisy input | 108 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
 | Guidance (always on) | 110 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |

@@ -1,28 +1,9 @@
 # minFLUX
 
 ![minFLUX](assets/flux.jpg)
-An unofficial minimal implementation of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers, like [minGPT](https://github.com/karpathy/minGPT) but for FLUX. For learning only (cannot be used with pretrained weights). Since there are numerous possible design decisions in diffusion models, the purpose of this project is to understand the key model choices in FLUX.
+A minimal implementation of some important components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX tries to be small, clean, interpretable and educational. Since the design space of diffusion models is huge, the purpose of minFLUX is to understand the key model choices in FLUX.
 
-## Structure
-
-```
-minFLUX/
-├── shared/                         # Dependency-free utilities (only torch + numpy)
-│   ├── training_utils.py           # Timestep sampling, loss weighting, get_sigmas
-│   ├── latent_utils.py             # Pack/unpack latents, prepare position IDs
-│   └── rotary_emb.py               # RoPE: get_1d_rotary_pos_embed, apply_rotary_emb
-├── flux1/                          # FLUX.1 (dev/schnell)
-│   ├── model.py                    # FluxTransformer2DModel — full architecture (~300 lines)
-│   ├── training.py                 # Training: VAE encode -> flow matching -> velocity MSE
-│   ├── inference.py                # Inference: noise -> Euler ODE denoise -> VAE decode
-│   └── kontext_training.py         # Kontext: reference-image conditioned training
-└── flux2/                          # FLUX.2
-    ├── model.py                    # Flux2Transformer2DModel — SwiGLU, shared modulation (~350 lines)
-    ├── training.py                 # Training: patchify -> BatchNorm -> flow matching
-    └── inference.py                # Inference: denoise -> BN denorm -> unpatchify -> decode
-```
-
-Each `.py` file has a companion `.md` file, containing documentation and source-of-truth line mappings to the [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. These are to understand the implementation and verify the code.
+The `.py` files in `flux1/` and `flux2/` have companion `.md` files, containing documentation and source-of-truth line mappings to the [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. These `.md` files are to help understand and verify the code.
 
 ## Key Equations
 
@@ -38,6 +19,31 @@ loss = MSE(model(noisy, t), target)               # weighted MSE
 x_{t-1} = x_t + (sigma_next - sigma) * model(x_t, t)
 ```
 
+## Architecture
+
+```mermaid
+flowchart TD
+    TE["Text Encoder"] --> TextTok["text tokens"]
+    TS["Timestep t"] --> Temb["temb (sinusoidal + MLP)"]
+    Pixels["Image"] --> VAE["VAE Encode + Pack 2×2"] --> ImgTok["image tokens"]
+
+    TextTok -->|"text stream"| DoubleBlocks
+    ImgTok -->|"image stream"| DoubleBlocks
+    Temb -.->|"modulation"| DoubleBlocks
+    Temb -.->|"modulation"| SingleBlocks
+
+    subgraph dit ["Diffusion Transformer"]
+        DoubleBlocks["Double-Stream Blocks ×N<br/>(Joint Attention + FFN)"]
+        Cat["Concat text + image"]
+        SingleBlocks["Single-Stream Blocks ×M<br/>(Self-Attention + FFN)"]
+        DoubleBlocks --> Cat --> SingleBlocks
+    end
+
+    SingleBlocks --> Unpack["Unpack → Noise Prediction"]
+    Unpack -->|"training"| Loss["MSE of velocity prediction"]
+    Unpack -->|"inference"| Euler["Euler ODE → VAE Decode → Image"]
+```
+
 ## FLUX.1 vs FLUX.2
 
 | | FLUX.1 | FLUX.2 |
@@ -49,9 +55,15 @@ x_{t-1} = x_t + (sigma_next - sigma) * model(x_t, t)
 | RoPE | theta=10000, 3 axes | theta=2000, 4 axes |
 | Blocks | 19 double + 38 single | 8 double + 48 single |
 
-## No External Dependencies
+## Contributing
 
-No external dependencies beyond PyTorch. All utilities (RoPE, latent packing, timestep embeddings) are in `shared/`.
+Contributions welcome — especially:
+
+- **Accuracy fixes**: cross-reference code against the [diffusers](https://github.com/huggingface/diffusers) and fix discrepancies
+- **Documentation**: improve the companion `.md` files and update line mappings when diffusers changes
+- **New architectures**: add new FLUX variants following the `flux1/` / `flux2/` pattern (each `.py` with a companion `.md`)
+
+Please keep code minimal, self-explanatory, and verified against the diffusers source code.
 
 ## Warning
 

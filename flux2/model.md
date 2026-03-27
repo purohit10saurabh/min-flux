@@ -16,7 +16,7 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 | **RoPE theta**     | 10000                                                      | 2000                                                                      |
 | **RoPE axes**      | `(16, 56, 56)` — 3 axes, single `pos_embed(cat(txt, img))` | `(32, 32, 32, 32)` — 4 axes, separate `pos_embed(img)` + `pos_embed(txt)` |
 | **Biases**         | Most `bias=True`                                           | All `bias=False`                                                          |
-| **Default config** | 19+38 blocks, 24 heads, 3072d                              | 8+48 blocks, 48 heads, 6144d                                              |
+| **Default config** | 19 double + 38 single blocks, 24 heads, 3072d                              | 8 double + 48 single blocks, 48 heads, 6144d                                              |
 
 
 ## Source of Truth
@@ -34,7 +34,7 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 ### Line-by-Line Mapping
 
 
-| minFLUX class                     | Canonical Source                                                                  | Source Lines     | Verdict                                         |
+| minFLUX class                      | Canonical Source                                                                  | Source Lines     | Verdict                                         |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------- |
 | `get_timestep_embedding`           | `embeddings.get_timestep_embedding`                                               | 26-77            | MATCH (simplified)                              |
 | `TimestepEmbedding`                | `embeddings.TimestepEmbedding`                                                    | 1261-1306        | MATCH (bias=False)                              |
@@ -49,7 +49,7 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 | `Flux2ParallelSelfAttention`       | `transformer_flux2.Flux2ParallelSelfAttention` + `Flux2ParallelSelfAttnProcessor` | 568-621, 708-783 | MATCH (inlined processor)                       |
 | `Flux2TransformerBlock`            | `transformer_flux2.Flux2TransformerBlock`                                         | 855-947          | EXACT MATCH (logic)                             |
 | `Flux2SingleTransformerBlock`      | `transformer_flux2.Flux2SingleTransformerBlock`                                   | 786-852          | MATCH (simplified, no split_hidden_states)      |
-| `Flux2Transformer2DModel.__init_`_ | `transformer_flux2.Flux2Transformer2DModel.__init__`                              | 1094-1174        | MATCH (stripped KV cache, grad ckpt)            |
+| `Flux2Transformer2DModel.__init`__ | `transformer_flux2.Flux2Transformer2DModel.__init_`_                              | 1094-1174        | MATCH (stripped KV cache, grad ckpt)            |
 | `Flux2Transformer2DModel.forward`  | `transformer_flux2.Flux2Transformer2DModel.forward`                               | 1228-1381        | MATCH (stripped KV cache, grad ckpt)            |
 
 

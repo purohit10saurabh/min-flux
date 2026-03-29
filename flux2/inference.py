@@ -1,5 +1,6 @@
 """
 Minimal Flux2 (FLUX.2) inference — the complete sampling algorithm.
+Uses diffusers model objects (Flux2Transformer2DModel, AutoencoderKLFlux2), not the minimal model classes in this repo.
 
 Key differences from FLUX.1 (flux1/inference.py):
 - VAE decode: BatchNorm de-normalization + unpatchify (not shift_factor/scaling_factor)

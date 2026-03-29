@@ -151,7 +151,8 @@ def flux2_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb=None):
     if image_rotary_emb is not None:
         q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
         k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-    return F.scaled_dot_product_attention(q, k, v)
+    q, k, v = (t.transpose(1, 2) for t in (q, k, v))
+    return F.scaled_dot_product_attention(q, k, v).transpose(1, 2)
 
 
 class Flux2JointAttention(nn.Module):
@@ -213,7 +214,8 @@ class Flux2ParallelSelfAttention(nn.Module):
         if image_rotary_emb is not None:
             q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
             k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-        attn_out = F.scaled_dot_product_attention(q, k, v).flatten(-2).to(q.dtype)
+        q, k, v = (t.transpose(1, 2) for t in (q, k, v))
+        attn_out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).flatten(-2).to(q.dtype)
         mlp_out = self.mlp_act_fn(mlp_in)
         return self.to_out(torch.cat([attn_out, mlp_out], dim=-1))
 

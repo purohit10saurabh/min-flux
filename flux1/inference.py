@@ -1,5 +1,6 @@
 """
 Minimal Flux (FLUX.1) inference — the complete sampling algorithm.
+Uses diffusers model objects (FluxTransformer2DModel, AutoencoderKL), not the minimal model classes in this repo.
 
 References (source of truth):
 1) BFL flux-inference — time_shift, get_schedule, denoise:

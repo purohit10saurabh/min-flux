@@ -1,5 +1,6 @@
 """
 Minimal Flux Kontext (FLUX.1-Kontext) training — reference-image conditioned training.
+Uses diffusers model objects (FluxTransformer2DModel, AutoencoderKL), not the minimal model classes in this repo.
 
 This is a thin wrapper over the base training. The only additions:
 - Encode a reference image with the same VAE

@@ -3,7 +3,7 @@
 ![minFLUX](assets/flux.jpg)
 A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX tries to be small, clean, interpretable and educational. Since the design space of diffusion models is huge, the purpose of minFLUX is to understand the key model choices in FLUX.
 
-The `.py` files in `flux1/` and `flux2/` have companion `.md` files, containing documentation and source-of-truth line mappings to the [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. These `.md` files are to help understand and verify the code.
+minFLUX is inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. Each `.py` file in `flux1/` and `flux2/` has a `.md` file mapping the code to the exact source lines. This makes minFLUX unique and credible by referencing the official diffusers code.
 
 ## Key Equations
 
@@ -39,7 +39,7 @@ flowchart TD
         DoubleBlocks --> Cat --> SingleBlocks
     end
 
-    SingleBlocks --> Unpack["Unpack → Noise Prediction"]
+    SingleBlocks --> Unpack["Unpack → Velocity Prediction"]
     Unpack -->|"training"| Loss["MSE on velocity prediction"]
     Unpack -->|"inference"| Euler["Euler ODE → VAE Decode → Image"]
 ```
@@ -59,17 +59,15 @@ Block details: [FLUX.1 double/single-stream blocks](flux1/model.md#key-design-ch
 
 ## Contributing
 
-Contributions welcome — especially:
+Contributions are welcome, especially for:
 
-- **Accuracy fixes**: cross-reference code against the [diffusers](https://github.com/huggingface/diffusers) and fix discrepancies
+- **Source-of-truth**: cross-reference code against the [diffusers](https://github.com/huggingface/diffusers) and fix any implementation discrepancies
 - **Documentation**: improve the companion `.md` files and update line mappings when diffusers changes
 - **New architectures**: add new FLUX variants following the `flux1/` / `flux2/` pattern (each `.py` with a companion `.md`)
 
-Please keep code minimal, self-explanatory, and verified against the diffusers source code.
+## Disclaimer
 
-## Sources of Inaccuracy
-
-This implementation of FLUX.1 and FLUX.2 is inferred from the diffusers repo. The possible causes of inaccuracies in the code are:
+Since minFLUX is inferred from the official diffusers repo, the possible sources of inaccuracies in the code can be:
 
 - **AI-assisted**: The code is written with the help of AI, referencing the diffusers repo. It was verified line-by-line against the source but not executed end-to-end.
 - **Diffusers code changes**: Source-of-truth line numbers reference a specific [commit](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a). The diffusers codebase changes frequently, so functions may move, rename, or change signature.

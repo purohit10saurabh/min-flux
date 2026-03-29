@@ -1,5 +1,6 @@
 """
 Minimal Flux (FLUX.1) training — the complete training algorithm.
+Uses diffusers model objects (FluxTransformer2DModel, AutoencoderKL), not the minimal model classes in this repo.
 
 References (source of truth):
 1) diffusers training utilities — compute_density_for_timestep_sampling, compute_loss_weighting_for_sd3:

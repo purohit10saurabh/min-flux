@@ -1,6 +1,6 @@
 """
 Minimal Flux2 (FLUX.2) inference — the complete sampling algorithm.
-Uses diffusers model objects (Flux2Transformer2DModel, AutoencoderKLFlux2), not the minimal model classes in this repo.
+Uses the minimal transformer from this repo (flux2/model.py); VAE is a diffusers object.
 
 Key differences from FLUX.1 (flux1/inference.py):
 - VAE decode: BatchNorm de-normalization + unpatchify (not shift_factor/scaling_factor)
@@ -55,7 +55,7 @@ def flux2_inference(
     vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
     latent_height = 2 * (height // (vae_scale_factor * 2))
     latent_width = 2 * (width // (vae_scale_factor * 2))
-    num_channels = transformer.config.in_channels // 4
+    num_channels = transformer.in_channels // 4
 
     latents = torch.randn(1, num_channels * 4, latent_height // 2, latent_width // 2, device=device, dtype=dtype, generator=generator)
     latent_ids = prepare_latent_ids(latents).to(device=device, dtype=dtype)
@@ -71,8 +71,8 @@ def flux2_inference(
         timestep = t.expand(latents.shape[0]).to(dtype)
         noise_pred = transformer(
             hidden_states=latents, timestep=timestep / 1000, guidance=guidance,
-            encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids, return_dict=False,
-        )[0]
+            encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids,
+        )
         latents = euler_step(noise_pred, sigmas[i], sigmas[i + 1], latents)
 
     latents = latents.permute(0, 2, 1).reshape(1, -1, latent_height // 2, latent_width // 2)

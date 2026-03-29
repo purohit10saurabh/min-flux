@@ -1,6 +1,6 @@
 """
 Minimal Flux Kontext (FLUX.1-Kontext) training — reference-image conditioned training.
-Uses diffusers model objects (FluxTransformer2DModel, AutoencoderKL), not the minimal model classes in this repo.
+Uses the minimal transformer from this repo (flux1/model.py); VAE and scheduler are diffusers objects.
 
 This is a thin wrapper over the base training. The only additions:
 - Encode a reference image with the same VAE
@@ -69,14 +69,14 @@ def flux_kontext_training_step(
     hidden_states = torch.cat([packed_noisy, packed_ref], dim=1)
 
     guidance = None
-    if transformer.config.guidance_embeds:
+    if transformer.guidance_embeds:
         guidance = torch.tensor([guidance_scale], device=accelerator.device).expand(bsz)
 
     model_pred = transformer(
         hidden_states=hidden_states, timestep=timesteps / 1000, guidance=guidance,
         pooled_projections=pooled_prompt_embeds, encoder_hidden_states=prompt_embeds,
-        txt_ids=text_ids, img_ids=latent_image_ids, return_dict=False,
-    )[0]
+        txt_ids=text_ids, img_ids=latent_image_ids,
+    )
 
     model_pred = model_pred[:, :packed_noisy.shape[1]]
     model_pred = unpack_latents(

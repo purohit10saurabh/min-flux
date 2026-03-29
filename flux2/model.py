@@ -284,6 +284,7 @@ class Flux2Transformer2DModel(nn.Module):
     ):
         super().__init__()
         inner_dim = num_attention_heads * attention_head_dim
+        self.in_channels = in_channels
         self.inner_dim = inner_dim
         self.out_channels = in_channels
 

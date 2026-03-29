@@ -1,6 +1,6 @@
 """
 Minimal Flux2 (FLUX.2) training — the complete training algorithm.
-Uses diffusers model objects (Flux2Transformer2DModel, AutoencoderKLFlux2), not the minimal model classes in this repo.
+Uses the minimal transformer from this repo (flux2/model.py); VAE and scheduler are diffusers objects.
 
 Key differences from FLUX.1 (flux1/training.py):
 - VAE: AutoencoderKLFlux2 with BatchNorm normalization (not shift_factor/scaling_factor)
@@ -103,8 +103,8 @@ def flux2_training_step(
 
     model_pred = transformer(
         hidden_states=packed_noisy_model_input, timestep=timesteps / 1000, guidance=guidance,
-        encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids, return_dict=False,
-    )[0]
+        encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids,
+    )
 
     model_pred = unpack_latents(model_pred, model_input.shape[2], model_input.shape[3])
 

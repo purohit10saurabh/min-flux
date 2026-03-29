@@ -1,6 +1,6 @@
 """
 Minimal Flux (FLUX.1) training — the complete training algorithm.
-Uses diffusers model objects (FluxTransformer2DModel, AutoencoderKL), not the minimal model classes in this repo.
+Uses the minimal transformer from this repo (flux1/model.py); VAE and scheduler are diffusers objects.
 
 References (source of truth):
 1) diffusers training utilities — compute_density_for_timestep_sampling, compute_loss_weighting_for_sd3:
@@ -73,14 +73,14 @@ def flux_training_step(
     )
 
     guidance = None
-    if transformer.config.guidance_embeds:
+    if transformer.guidance_embeds:
         guidance = torch.tensor([guidance_scale], device=accelerator.device).expand(bsz)
 
     model_pred = transformer(
         hidden_states=packed_noisy_model_input, timestep=timesteps / 1000, guidance=guidance,
         pooled_projections=pooled_prompt_embeds, encoder_hidden_states=prompt_embeds,
-        txt_ids=text_ids, img_ids=latent_image_ids, return_dict=False,
-    )[0]
+        txt_ids=text_ids, img_ids=latent_image_ids,
+    )
 
     model_pred = unpack_latents(
         model_pred, height=model_input.shape[2] * vae_scale_factor,

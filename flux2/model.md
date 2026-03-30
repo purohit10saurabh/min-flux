@@ -4,21 +4,6 @@
 
 The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux1/model.py` for FLUX.1.
 
-## Architecture Differences from FLUX.1
-
-
-| Aspect             | FLUX.1                                                     | FLUX.2                                                                    |
-| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Modulation**     | Per-block `AdaLayerNormZero` (6 params each)               | 3 shared `Flux2Modulation` heads at model level                           |
-| **FFN**            | `Linear -> GELU(tanh) -> Linear`                           | `Linear -> SwiGLU -> Linear` (SiLU-gated)                                 |
-| **Single-stream**  | Separate attn + MLP, `proj_out(cat(attn, mlp))`            | Fused `to_qkv_mlp_proj`, parallel attn+MLP, fused `to_out`                |
-| **Timestep embed** | `FluxTimestepEmbedding` with pooled text projection        | `Flux2TimestepEmbedding` — timestep + guidance only                       |
-| **RoPE theta**     | 10000                                                      | 2000                                                                      |
-| **RoPE axes**      | `(16, 56, 56)` — 3 axes, single `pos_embed(cat(txt, img))` | `(32, 32, 32, 32)` — 4 axes, separate `pos_embed(img)` + `pos_embed(txt)` |
-| **Biases**         | Most `bias=True`                                           | All `bias=False`                                                          |
-| **Default config** | 19 double + 38 single blocks, 24 heads, 3072d                              | 8 double + 48 single blocks, 48 heads, 6144d                                              |
-
-
 ## Architecture
 
 ```mermaid
@@ -69,6 +54,26 @@ flowchart TD
     ProjOut --> Output["output (B, seq, 128)"]
 ```
 
+### Key Design Choices
+
+- **Double-stream blocks** ([`Flux2TransformerBlock`](model.py#L225)): Text and image maintain separate LayerNorm and SwiGLU FFN paths, but share a single joint attention. Both streams produce Q/K/V with separate projections; all three are concatenated across streams, Q and K are RMSNorm-ed and RoPE-encoded, then attend jointly via SDPA and split back by modality. Modulation (shift/scale/gate) comes from the model-level shared `Flux2Modulation` heads — not per-block learned AdaLN.
+- **Single-stream blocks** ([`Flux2SingleTransformerBlock`](model.py#L256)): Text and image tokens are already concatenated. A single fused `to_qkv_mlp_proj` linear produces QKV and MLP input simultaneously. Q and K are RMSNorm-ed and RoPE-encoded. Attention and SwiGLU MLP run in parallel, then a fused `to_out` projects their concatenated outputs. One shared modulation set (shift/scale/gate) per block.
+- **Shared modulation**: Three `Flux2Modulation` heads at model scope (`double_stream_modulation_img`, `double_stream_modulation_txt`, `single_stream_modulation`) compute modulation tensors once from `temb` and broadcast to all blocks of each type.
+- **RoPE**: Rotary embeddings computed separately for image and text position IDs, then concatenated. 4 axes (32+32+32+32 = 128 = head_dim), theta=2000.
+
+## Architecture Differences from FLUX.1
+
+
+| Aspect             | FLUX.1                                                     | FLUX.2                                                                    |
+| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **Modulation**     | Per-block `AdaLayerNormZero` (6 params each)               | 3 shared `Flux2Modulation` heads at model level                           |
+| **FFN**            | `Linear -> GELU(tanh) -> Linear`                           | `Linear -> SwiGLU -> Linear` (SiLU-gated)                                 |
+| **Single-stream**  | Separate attn + MLP, `proj_out(cat(attn, mlp))`            | Fused `to_qkv_mlp_proj`, parallel attn+MLP, fused `to_out`                |
+| **Timestep embed** | `FluxTimestepEmbedding` with pooled text projection        | `Flux2TimestepEmbedding` — timestep + guidance only                       |
+| **RoPE theta**     | 10000                                                      | 2000                                                                      |
+| **RoPE axes**      | `(16, 56, 56)` — 3 axes, single `pos_embed(cat(txt, img))` | `(32, 32, 32, 32)` — 4 axes, separate `pos_embed(img)` + `pos_embed(txt)` |
+| **Biases**         | Most `bias=True`                                           | All `bias=False`                                                          |
+| **Default config** | 19 double + 38 single blocks, 24 heads, 3072d                              | 8 double + 48 single blocks, 48 heads, 6144d                                              |
 ---
 
 ## Source of Truth
@@ -112,4 +117,3 @@ flowchart TD
 - **Attention processor dispatch** (inlined directly as `F.scaled_dot_product_attention`)
 - **ConfigMixin / ModelMixin / PeftAdapterMixin** (diffusers infrastructure)
 - **fp16 overflow clipping** (`clip(-65504, 65504)`)
-

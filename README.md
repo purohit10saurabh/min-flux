@@ -1,8 +1,8 @@
 # minFLUX
 
-A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX tries to be small, clean, interpretable and educational. Since the design space of diffusion models is huge, the purpose of minFLUX is to understand the key model choices in FLUX. minFLUX is also unique in that it is the only implementation of FLUX that is verifiable by referencing the official codebases.
+A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX aims to be small, clean, educational and verifiable. Since the design space of diffusion models is huge, the goal of minFLUX is to understand the key design choices behind FLUX. It is also the only implementation of FLUX that is verifiable by referencing the official codebases.
 
-The transformer architectures and algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL reference implementations ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has a companion `.md` file mapping every function to exact source lines at pinned commits. This extensive line-by-line source mapping makes minFLUX credible and verifiable.
+The model architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has a companion `.md` file extensively mapping every function to exact source lines at pinned commits. 
 
 ## Diffusion Equations
 
@@ -18,7 +18,7 @@ L &= \left\| model(x_t, t) - v \right\|^2 && \text{(MSE loss)}
 
 $$x_{t_{\text{next}}} = x_t + (\sigma(t_{\text{next}}) - \sigma(t)) \cdot model(x_t, t)$$
 
-## FLUX.2 Architecture
+## FLUX.2 Architecture Overview
 
 ```mermaid
 flowchart TD
@@ -48,9 +48,9 @@ flowchart TD
     Unpack -->|"inference"| Euler["Euler ODE → VAE Decode → Image"]
 ```
 
-Block details: [FLUX.1 double/single-stream blocks](flux1/model.md#key-design-choices) | [FLUX.2 block differences](flux2/model.md)
+Transformer block details: [FLUX.2 double/single-stream blocks](flux2/model.md#key-design-choices)
 
-## FLUX.1 vs FLUX.2
+## FLUX.1 vs FLUX.2 Comparison
 
 | | FLUX.1 | FLUX.2 |
 |---|--------|--------|

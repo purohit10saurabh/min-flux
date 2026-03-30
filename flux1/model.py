@@ -141,7 +141,8 @@ def flux_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb=None):
     if image_rotary_emb is not None:
         q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
         k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-    return F.scaled_dot_product_attention(q, k, v)
+    q, k, v = (t.transpose(1, 2) for t in (q, k, v))
+    return F.scaled_dot_product_attention(q, k, v).transpose(1, 2)
 
 
 class FluxJointAttention(nn.Module):
@@ -262,6 +263,7 @@ class FluxTransformer2DModel(nn.Module):
     ):
         super().__init__()
         inner_dim = num_attention_heads * attention_head_dim
+        self.in_channels = in_channels
         self.inner_dim = inner_dim
         self.out_channels = in_channels
         self.guidance_embeds = guidance_embeds

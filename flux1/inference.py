@@ -1,13 +1,14 @@
 """
 Minimal Flux (FLUX.1) inference — the complete sampling algorithm.
+Uses the minimal transformer (flux1/model.py) and VAE (flux1/vae.py) from this repo.
 
 References (source of truth):
 1) BFL flux-inference — time_shift, get_schedule, denoise:
    https://github.com/black-forest-labs/flux/blob/main/src/flux/sampling.py
-2) diffusers FluxPipeline — calculate_shift, timestep prep, VAE decode:
+2) BFL flux-inference — AutoEncoder decode, inverse scale/shift:
+   https://github.com/black-forest-labs/flux/blob/main/src/flux/modules/autoencoder.py
+3) diffusers FluxPipeline — calculate_shift, timestep prep:
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux/pipeline_flux.py
-3) diffusers FluxTransformer2DModel — forward() signature and timestep*1000 convention:
-   https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/transformers/transformer_flux.py
 """
 
 import numpy as np
@@ -42,10 +43,9 @@ def flux_inference(
     generator: torch.Generator = None,
 ):
     device = device or prompt_embeds.device
-    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
-    latent_height = 2 * (height // (vae_scale_factor * 2))
-    latent_width = 2 * (width // (vae_scale_factor * 2))
-    num_channels = transformer.config.in_channels
+    latent_height = 2 * (height // (vae.vae_scale_factor * 2))
+    latent_width = 2 * (width // (vae.vae_scale_factor * 2))
+    num_channels = transformer.in_channels
 
     latents = torch.randn(1, num_channels, latent_height, latent_width, device=device, dtype=dtype, generator=generator)
     latent_image_ids = prepare_latent_image_ids(1, latent_height // 2, latent_width // 2, device, dtype)
@@ -56,7 +56,7 @@ def flux_inference(
     timesteps = sigmas[:-1] * 1000
 
     guidance = None
-    if transformer.config.guidance_embeds:
+    if transformer.guidance_embeds:
         guidance = torch.full([1], guidance_scale, device=device, dtype=torch.float32)
 
     for i, t in enumerate(timesteps):
@@ -64,10 +64,9 @@ def flux_inference(
         noise_pred = transformer(
             hidden_states=latents, timestep=timestep / 1000, guidance=guidance,
             pooled_projections=pooled_prompt_embeds, encoder_hidden_states=prompt_embeds,
-            txt_ids=text_ids, img_ids=latent_image_ids, return_dict=False,
-        )[0]
+            txt_ids=text_ids, img_ids=latent_image_ids,
+        )
         latents = euler_step(noise_pred, sigmas[i], sigmas[i + 1], latents)
 
-    latents = unpack_latents(latents, height, width, vae_scale_factor)
-    latents = (latents / vae.config.scaling_factor) + vae.config.shift_factor
-    return vae.decode(latents.to(vae.dtype), return_dict=False)[0]
+    latents = unpack_latents(latents, height, width, vae.vae_scale_factor)
+    return vae.decode(latents)

@@ -29,7 +29,7 @@ shift = exp(mu)
 sigma_shifted = shift * sigma / (1 + (shift - 1) * sigma)
 ```
 
-This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from `https://github.com/black-forest-labs/flux/blob/main/src/flux/sampling.py`), rearranged into ratio form. A terminal `0.0` is appended for the final step.
+This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from [`src/flux/sampling.py`](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/sampling.py)), rearranged into ratio form. A terminal `0.0` is appended for the final step.
 
 ---
 
@@ -39,9 +39,10 @@ This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from `https
 
 | Short Name | Full Path |
 |------------|-----------|
-| `pipeline_flux` | `diffusers/src/diffusers/pipelines/flux/pipeline_flux.py` |
-| `scheduler` | `diffusers/src/diffusers/schedulers/scheduling_flow_match_euler_discrete.py` |
-| `transformer_flux` | `diffusers/src/diffusers/models/transformers/transformer_flux.py` |
+| `pipeline_flux` | [`src/diffusers/pipelines/flux/pipeline_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/pipelines/flux/pipeline_flux.py) |
+| `scheduler` | [`src/diffusers/schedulers/scheduling_flow_match_euler_discrete.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/schedulers/scheduling_flow_match_euler_discrete.py) |
+| `transformer_flux` | [`src/diffusers/models/transformers/transformer_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/transformers/transformer_flux.py) |
+| `flux1_ae` | [`src/flux/modules/autoencoder.py`](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/modules/autoencoder.py) |
 
 ### Line-by-Line Mapping
 
@@ -50,14 +51,15 @@ This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from `https
 | `calculate_shift` | `pipeline_flux.calculate_shift` | 74-84 | EXACT MATCH |
 | `get_sigmas` (linspace + exp(mu) shift + append 0) | BFL `sampling.time_shift` + `sampling.get_schedule` | 277-305 | MATCH (inlined, rearranged) |
 | `euler_step` | `scheduler.step` | 507-508 | EXACT MATCH (Euler ODE step distilled to one line) |
-| Latent preparation (randn + pack) | `pipeline_flux.prepare_latents` | 544-597 | MATCH (simplified) |
+| Latent preparation (randn + pack) | `pipeline_flux.prepare_latents` | 544-597 | MATCH (simplified); `vae.vae_scale_factor` replaces `2 ** (len(vae.config.block_out_channels) - 1)` |
 | `_prepare_latent_image_ids` call | `pipeline_flux._prepare_latent_image_ids` | 506-518 | EXACT MATCH |
 | Transformer forward kwargs | `pipeline_flux.__call__` denoise | 949-961 | EXACT MATCH (minus cache_context) |
 | `timestep / 1000` convention | `transformer_flux.forward` | 688 | CORRECT (transformer does `* 1000` internally) |
-| Unpack + inverse normalize + VAE decode | `pipeline_flux.__call__` | 1009-1012 | EXACT MATCH |
+| Unpack + VAE decode (`vae.decode`) | BFL `autoencoder.AutoEncoder.decode` | 313-315 | MATCH (scale/shift inside VAE) |
 
 ### Notes
 
 - **`euler_step`**: The full `scheduler.step()` (lines 425-524) handles per-token timesteps, stochastic sampling, upcasting, and step index tracking. We distill it to the deterministic core: `sample + dt * model_output`.
 - **Sigma shift**: The BFL reference uses `time_shift(mu, 1.0, t) = exp(mu) / (exp(mu) + (1/t - 1))`. We inline this as `shift * t / (1 + (shift - 1) * t)` where `shift = exp(mu)`.
 - **No `cache_context`**: Diffusers wraps the transformer call in `cache_context("cond")` for compilation optimization. Omitted for minimality.
+- **VAE decode**: The minimal `FluxAutoEncoder.decode` handles inverse scale/shift normalization internally. No manual `(latents / scaling_factor) + shift_factor` computation needed.

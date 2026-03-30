@@ -19,6 +19,58 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 | **Default config** | 19 double + 38 single blocks, 24 heads, 3072d                              | 8 double + 48 single blocks, 48 heads, 6144d                                              |
 
 
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph inputs [Inputs]
+        ImgIn["hidden_states<br/>(B, seq, 128)"]
+        TxtIn["encoder_hidden_states<br/>(B, txt_seq, 15360)"]
+        Timestep["timestep + guidance"]
+        PosIDs["img_ids + txt_ids<br/>(4D: T, H, W, L)"]
+    end
+
+    ImgIn --> XEmb["x_embedder<br/>Linear(128, 6144, bias=False)"]
+    TxtIn --> CtxEmb["context_embedder<br/>Linear(15360, 6144, bias=False)"]
+    Timestep --> TEmb["Flux2TimestepEmbedding<br/>sinusoidal -> MLP -> t_emb"]
+    PosIDs --> RoPE["Flux2PosEmbed<br/>RoPE (32+32+32+32 axes, theta=2000)<br/>separate text / image embeddings"]
+
+    TEmb --> SharedMod["Shared Modulation Heads<br/>double_img / double_txt / single<br/>(computed once, broadcast to all blocks)"]
+
+    subgraph double [" 8x Flux2TransformerBlock (double-stream) "]
+        direction TB
+        D_Mod["Flux2Modulation.split<br/>shift/scale/gate from shared mod"]
+        D_Attn["Flux2JointAttention<br/>Q,K,V from image + text<br/>concat -> RoPE -> SDPA -> split"]
+        D_FF["SwiGLU FFN (per stream)<br/>Linear -> SiLU gate -> Linear"]
+        D_Mod --> D_Attn --> D_FF
+    end
+
+    XEmb -->|"image stream"| double
+    CtxEmb -->|"text stream"| double
+    SharedMod -.->|"double_img + double_txt"| double
+    RoPE -.->|"concat rotary emb"| double
+
+    double --> CatStreams["cat(text, image) along seq"]
+
+    subgraph single [" 48x Flux2SingleTransformerBlock (single-stream) "]
+        direction TB
+        S_Mod["Flux2Modulation.split<br/>shift/scale/gate from shared mod"]
+        S_Par["Flux2ParallelSelfAttention<br/>fused QKV + MLP projection<br/>-> RoPE -> SDPA + SwiGLU in parallel<br/>-> fused to_out"]
+        S_Mod --> S_Par
+    end
+
+    CatStreams --> single
+    SharedMod -.->|"single_mod"| single
+    RoPE -.->|"concat rotary emb"| single
+
+    single --> SliceTxt["slice off text tokens"]
+    SliceTxt --> NormOut["AdaLayerNormContinuous<br/>conditioned on t_emb"]
+    NormOut --> ProjOut["proj_out: Linear(6144, 128, bias=False)"]
+    ProjOut --> Output["output (B, seq, 128)"]
+```
+
+---
+
 ## Source of Truth
 
 ### Canonical Source Files
@@ -26,9 +78,9 @@ The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux
 
 | Short Name          | Full Path                                                          |
 | ------------------- | ------------------------------------------------------------------ |
-| `transformer_flux2` | `diffusers/src/diffusers/models/transformers/transformer_flux2.py` |
-| `embeddings`        | `diffusers/src/diffusers/models/embeddings.py`                     |
-| `normalization`     | `diffusers/src/diffusers/models/normalization.py`                  |
+| `transformer_flux2` | [`src/diffusers/models/transformers/transformer_flux2.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/transformers/transformer_flux2.py) |
+| `embeddings`        | [`src/diffusers/models/embeddings.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/embeddings.py)                     |
+| `normalization`     | [`src/diffusers/models/normalization.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/normalization.py)                  |
 
 
 ### Line-by-Line Mapping

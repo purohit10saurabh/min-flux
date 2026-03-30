@@ -8,25 +8,49 @@ This file defines `FluxJointAttention + FluxTransformerBlock + FluxTransformer2D
 
 ## Architecture
 
-```
-Input: hidden_states (B, seq, 64) + encoder_hidden_states (B, txt_seq, 4096)
-  |
-  x_embedder: Linear(64, 3072)           context_embedder: Linear(4096, 3072)
-  |                                       |
-  +-- 19x FluxTransformerBlock (double-stream) --+
-  |   norm1 -> joint_attn -> residual            |
-  |   norm2 -> ff -> residual                    |
-  |   (text and image processed in parallel)     |
-  +----------------------------------------------+
-  |
-  +-- 38x FluxSingleTransformerBlock (single-stream) --+
-  |   cat(text, image) -> norm -> attn+mlp parallel    |
-  |   -> gate -> residual -> split(text, image)        |
-  +----------------------------------------------------+
-  |
-  norm_out (AdaLayerNormContinuous) -> proj_out: Linear(3072, 64)
-  |
-  Output: (B, seq, 64)
+```mermaid
+flowchart TD
+    subgraph inputs [Inputs]
+        ImgIn["hidden_states<br/>(B, seq, 64)"]
+        TxtIn["encoder_hidden_states<br/>(B, txt_seq, 4096)"]
+        Timestep["timestep + guidance<br/>+ pooled_projections"]
+        PosIDs["img_ids + txt_ids"]
+    end
+
+    ImgIn --> XEmb["x_embedder<br/>Linear(64, 3072)"]
+    TxtIn --> CtxEmb["context_embedder<br/>Linear(4096, 3072)"]
+    Timestep --> TEmb["FluxTimestepEmbedding<br/>sinusoidal -> MLP -> t_emb"]
+    PosIDs --> RoPE["FluxPosEmbed<br/>RoPE (16+56+56 axes)"]
+
+    subgraph double [" 19x FluxTransformerBlock (double-stream) "]
+        direction TB
+        D_Norm["AdaLayerNormZero<br/>shift/scale/gate from t_emb"]
+        D_Attn["FluxJointAttention<br/>Q,K,V from image + text<br/>concat -> RoPE -> SDPA -> split"]
+        D_FF["FFN (per stream)<br/>Linear -> GELU(tanh) -> Linear"]
+        D_Norm --> D_Attn --> D_FF
+    end
+
+    XEmb -->|"image stream"| double
+    CtxEmb -->|"text stream"| double
+    TEmb -.->|"modulation"| double
+    RoPE -.->|"rotary emb"| double
+
+    subgraph single [" 38x FluxSingleTransformerBlock (single-stream) "]
+        direction TB
+        S_Cat["cat(text, image) along seq"]
+        S_Norm["AdaLayerNormZeroSingle<br/>shift/scale/gate"]
+        S_Par["Parallel: attn + MLP<br/>proj_out(cat(attn_out, mlp_out))"]
+        S_Split["split -> text, image"]
+        S_Cat --> S_Norm --> S_Par --> S_Split
+    end
+
+    double -->|"text + image"| single
+    TEmb -.->|"modulation"| single
+    RoPE -.->|"rotary emb"| single
+
+    single --> NormOut["AdaLayerNormContinuous<br/>conditioned on t_emb"]
+    NormOut --> ProjOut["proj_out: Linear(3072, 64)"]
+    ProjOut --> Output["output (B, seq, 64)"]
 ```
 
 ### Key Design Choices
@@ -59,11 +83,11 @@ Input: hidden_states (B, seq, 64) + encoder_hidden_states (B, txt_seq, 4096)
 
 | Short Name | Full Path |
 |------------|-----------|
-| `transformer_flux` | `diffusers/src/diffusers/models/transformers/transformer_flux.py` |
-| `embeddings` | `diffusers/src/diffusers/models/embeddings.py` |
-| `normalization` | `diffusers/src/diffusers/models/normalization.py` |
-| `attention` | `diffusers/src/diffusers/models/attention.py` |
-| `activations` | `diffusers/src/diffusers/models/activations.py` |
+| `transformer_flux` | [`src/diffusers/models/transformers/transformer_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/transformers/transformer_flux.py) |
+| `embeddings` | [`src/diffusers/models/embeddings.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/embeddings.py) |
+| `normalization` | [`src/diffusers/models/normalization.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/normalization.py) |
+| `attention` | [`src/diffusers/models/attention.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/attention.py) |
+| `activations` | [`src/diffusers/models/activations.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/activations.py) |
 
 ### Line-by-Line Mapping
 

@@ -1,23 +1,21 @@
 """
 Minimal Flux (FLUX.1) training — the complete training algorithm.
-Uses the minimal transformer from this repo (flux1/model.py); VAE and scheduler are diffusers objects.
+Uses the minimal transformer (flux1/model.py) and VAE (flux1/vae.py) from this repo.
 
 References (source of truth):
-1) diffusers training utilities — compute_density_for_timestep_sampling, compute_loss_weighting_for_sd3:
+1) BFL flux-inference — AutoEncoder encode, scale/shift normalization:
+   https://github.com/black-forest-labs/flux/blob/main/src/flux/modules/autoencoder.py
+2) diffusers training utilities — timestep density sampling, loss weighting:
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/training_utils.py
-2) diffusers dreambooth LoRA Flux training example — training step structure, get_sigmas:
-   https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux.py
 3) diffusers FluxPipeline — _pack_latents, _unpack_latents, _prepare_latent_image_ids:
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux/pipeline_flux.py
-4) diffusers FluxTransformer2DModel — forward() signature and timestep*1000 convention:
-   https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/transformers/transformer_flux.py
-5) SD3 paper (Esser et al., 2024) — rectified flow, weighting schemes:
+4) SD3 paper (Esser et al., 2024) — rectified flow, weighting schemes:
    https://arxiv.org/abs/2403.03206
 """
 
 import torch
 
-from utils.training import (
+from utils.training_utils import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     get_sigmas,
@@ -28,7 +26,6 @@ from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
 def flux_training_step(
     transformer,
     vae,
-    noise_scheduler,
     optimizer,
     lr_scheduler,
     pixel_values: torch.Tensor,
@@ -43,12 +40,10 @@ def flux_training_step(
     mode_scale: float = 1.29,
     guidance_scale: float = 3.5,
     max_grad_norm: float = 1.0,
+    num_train_timesteps: int = 1000,
 ):
-    model_input = vae.encode(pixel_values.to(dtype=vae.dtype)).latent_dist.sample()
-    model_input = (model_input - vae.config.shift_factor) * vae.config.scaling_factor
-    model_input = model_input.to(dtype=weight_dtype)
+    model_input = vae.encode(pixel_values).to(dtype=weight_dtype)
 
-    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
     latent_image_ids = prepare_latent_image_ids(
         model_input.shape[0], model_input.shape[2] // 2, model_input.shape[3] // 2,
         accelerator.device, weight_dtype,
@@ -61,10 +56,9 @@ def flux_training_step(
         weighting_scheme=weighting_scheme, batch_size=bsz,
         logit_mean=logit_mean, logit_std=logit_std, mode_scale=mode_scale,
     )
-    indices = (u * noise_scheduler.config.num_train_timesteps).long()
-    timesteps = noise_scheduler.timesteps[indices].to(device=model_input.device)
-
-    sigmas = get_sigmas(timesteps, noise_scheduler, accelerator.device, n_dim=model_input.ndim, dtype=model_input.dtype)
+    indices = (u * num_train_timesteps).long()
+    sigmas = get_sigmas(indices, num_train_timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
+    timesteps = sigmas.flatten() * num_train_timesteps
     noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
 
     packed_noisy_model_input = pack_latents(
@@ -83,8 +77,8 @@ def flux_training_step(
     )
 
     model_pred = unpack_latents(
-        model_pred, height=model_input.shape[2] * vae_scale_factor,
-        width=model_input.shape[3] * vae_scale_factor, vae_scale_factor=vae_scale_factor,
+        model_pred, height=model_input.shape[2] * vae.vae_scale_factor,
+        width=model_input.shape[3] * vae.vae_scale_factor, vae_scale_factor=vae.vae_scale_factor,
     )
 
     weighting = compute_loss_weighting_for_sd3(weighting_scheme=weighting_scheme, sigmas=sigmas)
@@ -103,7 +97,7 @@ def flux_training_step(
 
 
 def flux_training(
-    transformer, vae, noise_scheduler, optimizer, lr_scheduler,
+    transformer, vae, optimizer, lr_scheduler,
     train_dataloader, accelerator, num_epochs: int,
     weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",
     guidance_scale: float = 3.5, max_grad_norm: float = 1.0,
@@ -118,7 +112,7 @@ def flux_training(
         for batch in train_dataloader:
             with accelerator.accumulate(transformer):
                 loss = flux_training_step(
-                    transformer=transformer, vae=vae, noise_scheduler=noise_scheduler,
+                    transformer=transformer, vae=vae,
                     optimizer=optimizer, lr_scheduler=lr_scheduler,
                     pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
                     pooled_prompt_embeds=batch["pooled_prompt_embeds"], text_ids=batch["text_ids"],

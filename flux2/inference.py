@@ -1,9 +1,9 @@
 """
 Minimal Flux2 (FLUX.2) inference — the complete sampling algorithm.
-Uses the minimal transformer from this repo (flux2/model.py); VAE is a diffusers object.
+Uses the minimal transformer (flux2/model.py) and VAE (flux2/vae.py) from this repo.
 
 Key differences from FLUX.1 (flux1/inference.py):
-- VAE decode: BatchNorm de-normalization + unpatchify (not shift_factor/scaling_factor)
+- VAE decode: Flux2AutoEncoder handles BatchNorm inv_normalize + unpatchify internally
 - Timestep shift: compute_empirical_mu (fitted linear, not calculate_shift)
 - Position IDs: 4D (T, H, W, L) not 3D (ch, H, W)
 - Transformer: no pooled_projections, guidance always on
@@ -11,17 +11,15 @@ Key differences from FLUX.1 (flux1/inference.py):
 References (source of truth):
 1) BFL flux2-inference — generalized_time_snr_shift, get_schedule, compute_empirical_mu, denoise:
    https://github.com/black-forest-labs/flux2/blob/main/src/flux2/sampling.py
-2) diffusers Flux2Pipeline — VAE decode, latent preparation:
-   https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux2/pipeline_flux2.py
-3) diffusers Flux2Transformer2DModel — forward() signature:
-   https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/transformers/transformer_flux2.py
+2) BFL Flux2 autoencoder — decode (inv_normalize + unpatchify):
+   https://github.com/black-forest-labs/flux2/blob/main/src/flux2/autoencoder.py
 """
 
 import numpy as np
 import torch
 
 from flux1.inference import euler_step
-from flux2.training import unpatchify_latents, pack_latents, prepare_latent_ids
+from flux2.training import pack_latents, prepare_latent_ids
 
 
 def compute_empirical_mu(image_seq_len: int, num_steps: int) -> float:
@@ -52,9 +50,8 @@ def flux2_inference(
     dtype: torch.dtype = torch.bfloat16, generator: torch.Generator = None,
 ):
     device = device or prompt_embeds.device
-    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
-    latent_height = 2 * (height // (vae_scale_factor * 2))
-    latent_width = 2 * (width // (vae_scale_factor * 2))
+    latent_height = 2 * (height // (vae.vae_scale_factor * 2))
+    latent_width = 2 * (width // (vae.vae_scale_factor * 2))
     num_channels = transformer.in_channels // 4
 
     latents = torch.randn(1, num_channels * 4, latent_height // 2, latent_width // 2, device=device, dtype=dtype, generator=generator)
@@ -76,8 +73,4 @@ def flux2_inference(
         latents = euler_step(noise_pred, sigmas[i], sigmas[i + 1], latents)
 
     latents = latents.permute(0, 2, 1).reshape(1, -1, latent_height // 2, latent_width // 2)
-    bn_mean = vae.bn.running_mean.view(1, -1, 1, 1).to(latents.device, latents.dtype)
-    bn_std = torch.sqrt(vae.bn.running_var.view(1, -1, 1, 1) + vae.config.batch_norm_eps).to(latents.device, latents.dtype)
-    latents = latents * bn_std + bn_mean
-    latents = unpatchify_latents(latents)
-    return vae.decode(latents.to(vae.dtype), return_dict=False)[0]
+    return vae.decode(latents)

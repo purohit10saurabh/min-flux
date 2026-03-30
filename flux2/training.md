@@ -43,21 +43,18 @@ This document explains FLUX.2 training, how it differs from FLUX.1, and maps eve
 ### 1. VAE Encoding + BatchNorm Normalization
 
 ```python
-latents = vae.encode(pixel_values).latent_dist.sample()
-model_input = patchify_latents(latents)
-model_input = (model_input - bn_mean) / bn_std
+model_input = vae.encode(pixel_values)
 ```
 
 **FLUX.1** uses `(latents - shift_factor) * scaling_factor`.
 
-**FLUX.2** uses a three-step process:
-1. VAE encode to raw latents: `(B, 32, H, W)`
-2. Patchify into 2×2 patches: `(B, 128, H/2, W/2)`
-3. BatchNorm normalize using the VAE's running statistics
+The minimal `Flux2AutoEncoder.encode` handles quant_conv, mean extraction, patchification, and BatchNorm normalization internally.
 
-The BatchNorm layer is initialized in `AutoencoderKLFlux2.__init__` with `affine=False` and `track_running_stats=True`. The running mean and variance are loaded from the pretrained checkpoint.
+**FLUX.2** latent layout after encode: patchified 2×2 patches `(B, 128, H/2, W/2)` with BatchNorm applied using the VAE's running statistics. The BatchNorm layer is initialized in `Flux2AutoEncoder.__init__` with `affine=False` and `track_running_stats=True`. The running mean and variance are loaded from the pretrained checkpoint.
 
 ### 2. Patchification
+
+`patchify_latents` is no longer a standalone function in `flux2/training.py`; the live implementation is `Flux2AutoEncoder._patchify` in `flux2/vae.py` (lines 52–54).
 
 ```python
 def patchify_latents(latents):
@@ -105,8 +102,7 @@ model_pred = transformer(
     encoder_hidden_states=prompt_embeds,
     txt_ids=text_ids,
     img_ids=latent_ids,
-    return_dict=False,
-)[0]
+)
 ```
 
 Key differences from FLUX.1:
@@ -122,7 +118,7 @@ The flow matching objective is identical:
 - **Timestep sampling**: `logit_normal`, `mode`, or uniform
 - **Loss weighting**: `sigma_sqrt`, `cosmap`, or uniform
 
-These are imported from `utils/training.py`.
+These are imported from `utils/training_utils.py`.
 
 ---
 
@@ -132,35 +128,36 @@ These are imported from `utils/training.py`.
 
 | Short Name | Full Path |
 |------------|-----------|
-| `transformer_flux2` | `diffusers/src/diffusers/models/transformers/transformer_flux2.py` |
-| `pipeline_flux2` | `diffusers/src/diffusers/pipelines/flux2/pipeline_flux2.py` |
-| `autoencoder_flux2` | `diffusers/src/diffusers/models/autoencoders/autoencoder_kl_flux2.py` |
-| `training` | `diffusers/src/diffusers/training.py` |
+| `transformer_flux2` | [`src/diffusers/models/transformers/transformer_flux2.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/transformers/transformer_flux2.py) |
+| `pipeline_flux2` | [`src/diffusers/pipelines/flux2/pipeline_flux2.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/pipelines/flux2/pipeline_flux2.py) |
+| `autoencoder_flux2` | [`src/diffusers/models/autoencoders/autoencoder_kl_flux2.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/autoencoders/autoencoder_kl_flux2.py) |
+| `flux2_ae` | [`src/flux2/autoencoder.py`](https://github.com/black-forest-labs/flux2/blob/50fe5162777813d869182b139e83b10743caef15/src/flux2/autoencoder.py) |
+| `training` | [`src/diffusers/training.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/training.py) |
 
 ### Line-by-Line Mapping
 
 | minFLUX function / block | Lines | Canonical Source | Source Lines | Verdict |
 |---------------------------|-------|------------------|--------------|---------|
-| `patchify_latents` | 37-40 | `pipeline_flux2._patchify_latents` | 457-462 | EXACT MATCH |
-| `unpatchify_latents` | 43-46 | `pipeline_flux2._unpatchify_latents` | 465-470 | EXACT MATCH |
-| `pack_latents` | 49-51 | `pipeline_flux2._pack_latents` | 473-481 | EXACT MATCH |
-| `unpack_latents` | 54-56 | Inverse of `_pack_latents` | N/A | DERIVED (simple permute+reshape inverse) |
-| `prepare_latent_ids` | 59-62 | `pipeline_flux2._prepare_latent_ids` | 375-404 | MATCH (simplified, no docstring) |
-| `prepare_text_ids` | 65-68 | `pipeline_flux2._prepare_text_ids` | 356-372 | MATCH (simplified) |
-| VAE encode + patchify + BN | 82-89 | `pipeline_flux2._encode_vae_image` | 606-617 | MATCH (`.sample()` for training vs `.mode()` for inference) |
-| Position ID preparation | 91 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
-| Timestep sampling | 96-103 | `training.compute_density_for_timestep_sampling` | 360-384 | IMPORTED from flux_training |
-| Noise interpolation | 105-106 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
-| Pack noisy input | 108 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
-| Guidance (always on) | 110 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |
-| Transformer forward | 112-120 | `pipeline_flux2.__call__` denoise | 971-980 | EXACT MATCH (no `pooled_projections`) |
-| Unpack model prediction | 122 | Inverse of pack (training only) | N/A | DERIVED |
-| Loss computation | 124-127 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from flux_training |
+| `Flux2AutoEncoder._patchify` | flux2/vae.py 52-54 | BFL `autoencoder.AutoEncoder.encode` (rearrange) | 318-324 | MATCH |
+| `Flux2AutoEncoder._unpatchify` | flux2/vae.py 56-58 | BFL `autoencoder.AutoEncoder.decode` (rearrange) | 329-334 | MATCH (decode unpatchify) |
+| `pack_latents` | 32-34 | `pipeline_flux2._pack_latents` | 473-481 | EXACT MATCH |
+| `unpack_latents` | 37-39 | Inverse of `_pack_latents` | N/A | DERIVED (simple permute+reshape inverse) |
+| `prepare_latent_ids` | 42-45 | `pipeline_flux2._prepare_latent_ids` | 375-404 | MATCH (simplified, no docstring) |
+| `prepare_text_ids` | 48-51 | `pipeline_flux2._prepare_text_ids` | 356-372 | MATCH (simplified) |
+| VAE encode (quant_conv, mean, patchify, BN) | 62 | BFL `autoencoder.AutoEncoder.encode` | 314-325 | MATCH (minimal VAE uses `quant_conv`; BFL uses encoder moments) |
+| Position ID preparation | 64 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
+| Timestep sampling + sigmas | 69-75 | `utils/training.compute_density_for_timestep_sampling`, `get_sigmas` (diffusers `training_utils` + FlowMatch sigma table) | 23-40, 54-58 | IMPORTED / inlined (no `noise_scheduler`) |
+| Noise interpolation | 76 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
+| Pack noisy input | 78 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
+| Guidance (always on) | 80 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |
+| Transformer forward | 82-85 | `pipeline_flux2.__call__` denoise | 971-980 | EXACT MATCH (no `pooled_projections`) |
+| Unpack model prediction | 87 | Inverse of pack (training only) | N/A | DERIVED |
+| Loss computation | 89-92 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from utils.training |
 
 ### Notes
 
 - **`unpack_latents`**: Not directly from diffusers. The pipeline uses `_unpack_latents_with_ids` (position-ID-based scatter) for variable-resolution support. For fixed-resolution training, the simple inverse of `pack_latents` is mathematically equivalent and avoids the scatter overhead.
-- **`.sample()` vs `.mode()`**: The pipeline's `_encode_vae_image` uses `sample_mode="argmax"` (deterministic). For training, we use `.sample()` (stochastic) to match standard VAE training practice.
+- **Encode path**: The minimal `Flux2AutoEncoder.encode` takes the mean latent (no diagonal Gaussian `.sample()`); BFL `AutoEncoder.encode` matches patchify + BatchNorm after the mean split.
 - **`guidance_scale=2.5`**: Default from `Flux2Pipeline.__call__`. FLUX.1 uses 3.5.
 - **`text_ids`**: Expected shape `(B, seq_len, 4)` with coordinates `(T=0, H=0, W=0, L=token_idx)`. Can be pre-computed with `prepare_text_ids(prompt_embeds)` or supplied in the batch.
 

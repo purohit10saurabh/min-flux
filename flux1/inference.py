@@ -1,14 +1,14 @@
 """
 Minimal Flux (FLUX.1) inference — the complete sampling algorithm.
-Uses the minimal transformer from this repo (flux1/model.py); VAE is a diffusers object.
+Uses the minimal transformer (flux1/model.py) and VAE (flux1/vae.py) from this repo.
 
 References (source of truth):
 1) BFL flux-inference — time_shift, get_schedule, denoise:
    https://github.com/black-forest-labs/flux/blob/main/src/flux/sampling.py
-2) diffusers FluxPipeline — calculate_shift, timestep prep, VAE decode:
+2) BFL flux-inference — AutoEncoder decode, inverse scale/shift:
+   https://github.com/black-forest-labs/flux/blob/main/src/flux/modules/autoencoder.py
+3) diffusers FluxPipeline — calculate_shift, timestep prep:
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux/pipeline_flux.py
-3) diffusers FluxTransformer2DModel — forward() signature and timestep*1000 convention:
-   https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/transformers/transformer_flux.py
 """
 
 import numpy as np
@@ -43,9 +43,8 @@ def flux_inference(
     generator: torch.Generator = None,
 ):
     device = device or prompt_embeds.device
-    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
-    latent_height = 2 * (height // (vae_scale_factor * 2))
-    latent_width = 2 * (width // (vae_scale_factor * 2))
+    latent_height = 2 * (height // (vae.vae_scale_factor * 2))
+    latent_width = 2 * (width // (vae.vae_scale_factor * 2))
     num_channels = transformer.in_channels
 
     latents = torch.randn(1, num_channels, latent_height, latent_width, device=device, dtype=dtype, generator=generator)
@@ -69,6 +68,5 @@ def flux_inference(
         )
         latents = euler_step(noise_pred, sigmas[i], sigmas[i + 1], latents)
 
-    latents = unpack_latents(latents, height, width, vae_scale_factor)
-    latents = (latents / vae.config.scaling_factor) + vae.config.shift_factor
-    return vae.decode(latents.to(vae.dtype), return_dict=False)[0]
+    latents = unpack_latents(latents, height, width, vae.vae_scale_factor)
+    return vae.decode(latents)

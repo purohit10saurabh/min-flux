@@ -1,14 +1,14 @@
 """
 Minimal Flux Kontext (FLUX.1-Kontext) training — reference-image conditioned training.
-Uses the minimal transformer from this repo (flux1/model.py); VAE and scheduler are diffusers objects.
+Uses the minimal transformer (flux1/model.py) and VAE (flux1/vae.py) from this repo.
 
 This is a thin wrapper over the base training. The only additions:
-- Encode a reference image with the same VAE
+- Encode a reference image with the same VAE (deterministic, sample=False)
 - Pack reference latents and prepare position IDs with first dim = 1
 - Concatenate reference tokens after noise tokens in the sequence
 - Slice the output to discard reference token predictions
 
-References (source of truth):   
+References (source of truth):
 1) diffusers FluxKontextPipeline — _encode_vae_image, prepare_latents (reference branch), denoise loop:
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/flux/pipeline_flux_kontext.py
 2) All other components inherited from flux1/training.py (see its header for sources)
@@ -16,7 +16,7 @@ References (source of truth):
 
 import torch
 
-from utils.training import (
+from utils.training_utils import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
     get_sigmas,
@@ -25,22 +25,17 @@ from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
 
 
 def flux_kontext_training_step(
-    transformer, vae, noise_scheduler, optimizer, lr_scheduler,
+    transformer, vae, optimizer, lr_scheduler,
     pixel_values: torch.Tensor, reference_pixel_values: torch.Tensor,
     prompt_embeds: torch.Tensor, pooled_prompt_embeds: torch.Tensor,
     text_ids: torch.Tensor, accelerator, weight_dtype: torch.dtype,
     weighting_scheme: str = "none", logit_mean: float = 0.0, logit_std: float = 1.0,
     mode_scale: float = 1.29, guidance_scale: float = 3.5, max_grad_norm: float = 1.0,
+    num_train_timesteps: int = 1000,
 ):
-    model_input = vae.encode(pixel_values.to(dtype=vae.dtype)).latent_dist.sample()
-    model_input = (model_input - vae.config.shift_factor) * vae.config.scaling_factor
-    model_input = model_input.to(dtype=weight_dtype)
+    model_input = vae.encode(pixel_values, sample=True).to(dtype=weight_dtype)
+    ref_latents = vae.encode(reference_pixel_values, sample=False).to(dtype=weight_dtype)
 
-    ref_latents = vae.encode(reference_pixel_values.to(dtype=vae.dtype)).latent_dist.mode()
-    ref_latents = (ref_latents - vae.config.shift_factor) * vae.config.scaling_factor
-    ref_latents = ref_latents.to(dtype=weight_dtype)
-
-    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
     bsz = model_input.shape[0]
 
     noise_ids = prepare_latent_image_ids(
@@ -58,10 +53,9 @@ def flux_kontext_training_step(
         weighting_scheme=weighting_scheme, batch_size=bsz,
         logit_mean=logit_mean, logit_std=logit_std, mode_scale=mode_scale,
     )
-    indices = (u * noise_scheduler.config.num_train_timesteps).long()
-    timesteps = noise_scheduler.timesteps[indices].to(device=model_input.device)
-
-    sigmas = get_sigmas(timesteps, noise_scheduler, accelerator.device, n_dim=model_input.ndim, dtype=model_input.dtype)
+    indices = (u * num_train_timesteps).long()
+    sigmas = get_sigmas(indices, num_train_timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
+    timesteps = sigmas.flatten() * num_train_timesteps
     noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
 
     packed_noisy = pack_latents(noisy_model_input, bsz, model_input.shape[1], model_input.shape[2], model_input.shape[3])
@@ -80,8 +74,8 @@ def flux_kontext_training_step(
 
     model_pred = model_pred[:, :packed_noisy.shape[1]]
     model_pred = unpack_latents(
-        model_pred, height=model_input.shape[2] * vae_scale_factor,
-        width=model_input.shape[3] * vae_scale_factor, vae_scale_factor=vae_scale_factor,
+        model_pred, height=model_input.shape[2] * vae.vae_scale_factor,
+        width=model_input.shape[3] * vae.vae_scale_factor, vae_scale_factor=vae.vae_scale_factor,
     )
 
     weighting = compute_loss_weighting_for_sd3(weighting_scheme=weighting_scheme, sigmas=sigmas)
@@ -100,7 +94,7 @@ def flux_kontext_training_step(
 
 
 def flux_kontext_training(
-    transformer, vae, noise_scheduler, optimizer, lr_scheduler,
+    transformer, vae, optimizer, lr_scheduler,
     train_dataloader, accelerator, num_epochs: int,
     weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",
     guidance_scale: float = 3.5, max_grad_norm: float = 1.0,
@@ -115,7 +109,7 @@ def flux_kontext_training(
         for batch in train_dataloader:
             with accelerator.accumulate(transformer):
                 loss = flux_kontext_training_step(
-                    transformer=transformer, vae=vae, noise_scheduler=noise_scheduler,
+                    transformer=transformer, vae=vae,
                     optimizer=optimizer, lr_scheduler=lr_scheduler,
                     pixel_values=batch["pixel_values"],
                     reference_pixel_values=batch["reference_pixel_values"],

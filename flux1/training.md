@@ -252,7 +252,7 @@ These choices follow state-of-the-art practices from the SD3 paper and enable hi
 
 ## Source of Truth
 
-Every function in `flux1/training.py` maps to a canonical diffusers source. Shared utilities live in `utils/training.py`. Verified against the `diffusers` repo source code.
+Every function in `flux1/training.py` maps to a canonical BFL or diffusers source. The minimal VAE (flux1/vae.py) and scheduler-free sigma computation (utils/training_utils.py) replace the diffusers `AutoencoderKL` and `FlowMatchEulerDiscreteScheduler`. Shared utilities live in `utils/training_utils.py`. Verified against the `diffusers` repo source code.
 
 ### Why DreamBooth as Source of Truth?
 
@@ -264,10 +264,12 @@ The dreambooth script is the canonical composition: VAE encode, noise interpolat
 
 | Short Name | Full Path |
 |------------|-----------|
-| `training` | `diffusers/src/diffusers/training.py` |
-| `dreambooth_flux` | `diffusers/examples/dreambooth/train_dreambooth_lora_flux.py` |
-| `pipeline_flux` | `diffusers/src/diffusers/pipelines/flux/pipeline_flux.py` |
-| `transformer_flux` | `diffusers/src/diffusers/models/transformers/transformer_flux.py` |
+| `training` | [`src/diffusers/training.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/training.py) |
+| `dreambooth_flux` | [`examples/dreambooth/train_dreambooth_lora_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/examples/dreambooth/train_dreambooth_lora_flux.py) |
+| `pipeline_flux` | [`src/diffusers/pipelines/flux/pipeline_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/pipelines/flux/pipeline_flux.py) |
+| `transformer_flux` | [`src/diffusers/models/transformers/transformer_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/models/transformers/transformer_flux.py) |
+| `flux1_ae` | [`src/flux/modules/autoencoder.py`](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/modules/autoencoder.py) |
+| `scheduler` | [`src/diffusers/schedulers/scheduling_flow_match_euler_discrete.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/schedulers/scheduling_flow_match_euler_discrete.py) |
 
 ### Line-by-Line Mapping
 
@@ -275,22 +277,22 @@ The dreambooth script is the canonical composition: VAE encode, noise interpolat
 |---------------------------|-------|------------------|--------------|---------|
 | `compute_density_for_timestep_sampling` | 19-36 | `training` | 360-384 | EXACT MATCH |
 | `compute_loss_weighting_for_sd3` | 39-47 | `training` | 387-402 | EXACT MATCH |
-| `get_sigmas` | 50-58 | `dreambooth_flux` (inner fn) | 1678-1687 | MATCH (refactored from closure) |
-| VAE encode + shift/scale | 82-84 | `dreambooth_flux` | 1744-1748 | EXACT MATCH |
-| `_prepare_latent_image_ids` call | 86-93 | `dreambooth_flux` calling `pipeline_flux` | 1750-1758 / 506-518 | EXACT MATCH |
-| Timestep sampling (u -> indices -> timesteps) | 98-106 | `dreambooth_flux` | 1763-1773 | EXACT MATCH |
-| Noise interpolation `(1-σ)*x + σ*ε` | 108-109 | `dreambooth_flux` | 1775-1778 | EXACT MATCH |
-| `_pack_latents` call | 111-117 | `dreambooth_flux` calling `pipeline_flux` | 1780-1786 / 520-526 | EXACT MATCH |
-| Guidance embedding | 119-121 | `dreambooth_flux` | 1788-1793 | MINOR DIFF: no `unwrap_model` |
-| Transformer forward | 123-132 | `dreambooth_flux` + `transformer_flux` forward | 1795-1806 / 637-653 | EXACT MATCH |
-| `_unpack_latents` call | 134-139 | `dreambooth_flux` calling `pipeline_flux` | 1807-1812 / 528-542 | EXACT MATCH |
-| Loss weighting + target + MSE | 141-144 | `dreambooth_flux` | 1814-1840 | EXACT MATCH (minus prior_preservation) |
-| Optimizer step | 146-151 | Standard Accelerate pattern | N/A | CORRECT |
+| `get_sigmas` | 54-58 | `scheduler` `__init__` | 126-129 | MATCH (sigma = 1 - i/N, replaces scheduler lookup) |
+| VAE encode (`vae.encode`) | 45 | `flux1_ae` `AutoEncoder.encode` | 308-311 | MATCH (inlined DiagonalGaussian) |
+| `prepare_latent_image_ids` call | 47-50 | `dreambooth_flux` calling `pipeline_flux` | 1750-1758 / 506-518 | EXACT MATCH |
+| Timestep sampling (u -> indices -> sigmas) | 55-61 | `dreambooth_flux` + `scheduler` `__init__` | 1763-1773 / 126-129 | MATCH (scheduler replaced with direct computation) |
+| Noise interpolation `(1-σ)*x + σ*ε` | 62 | `dreambooth_flux` | 1775-1778 | EXACT MATCH |
+| `pack_latents` call | 64-67 | `dreambooth_flux` calling `pipeline_flux` | 1780-1786 / 520-526 | EXACT MATCH |
+| Guidance embedding | 69-71 | `dreambooth_flux` | 1788-1793 | MINOR DIFF: no `unwrap_model` |
+| Transformer forward | 73-77 | `dreambooth_flux` + `transformer_flux` forward | 1795-1806 / 637-653 | EXACT MATCH |
+| `unpack_latents` call | 79-82 | `dreambooth_flux` calling `pipeline_flux` | 1807-1812 / 528-542 | EXACT MATCH |
+| Loss weighting + target + MSE | 84-87 | `dreambooth_flux` | 1814-1840 | EXACT MATCH (minus prior_preservation) |
+| Optimizer step | 89-94 | Standard Accelerate pattern | N/A | CORRECT |
 
 ### Notes
 
 - **`timestep / 1000`**: The transformer internally multiplies by 1000 (`transformer_flux.py` line 688). The division before calling and multiplication inside cancel out, preserving the original timestep value for the sinusoidal embedding.
-- **Guidance**: Diffusers uses `unwrap_model(transformer).config.guidance_embeds` for FSDP/DeepSpeed compatibility. This minimal version accesses `transformer.config` directly (single-GPU only).
+- **Guidance**: Diffusers uses `unwrap_model(transformer).config.guidance_embeds` for FSDP/DeepSpeed compatibility. This minimal version accesses `transformer.guidance_embeds` directly (single-GPU only).
 - **Prior preservation**: Diffusers dreambooth supports `with_prior_preservation` loss chunking (lines 1821-1844). Omitted here for minimality.
 
 ---

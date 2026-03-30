@@ -11,16 +11,15 @@ Only 5 additions to the base training step:
 ### 1. Encode Reference Image
 
 ```python
-ref_latents = vae.encode(reference_pixel_values).latent_dist.mode()
-ref_latents = (ref_latents - shift_factor) * scaling_factor
+ref_latents = vae.encode(reference_pixel_values, sample=False)
 ```
 
-Uses `.mode()` (deterministic) instead of `.sample()` (stochastic) — the reference should be a fixed conditioning signal.
+With `sample=False`, encoding is deterministic — the reference should be a fixed conditioning signal.
 
 ### 2. Reference Position IDs
 
 ```python
-ref_ids = FluxPipeline._prepare_latent_image_ids(...)
+ref_ids = prepare_latent_image_ids(...)
 ref_ids[..., 0] = 1  # first dim = 1 to distinguish from noise (which has 0)
 ```
 
@@ -53,17 +52,17 @@ The dataloader must provide `batch["reference_pixel_values"]` in addition to the
 
 | Short Name | Full Path |
 |------------|-----------|
-| `kontext_pipeline` | `diffusers/src/diffusers/pipelines/flux/pipeline_flux_kontext.py` |
-| `pipeline_flux` | `diffusers/src/diffusers/pipelines/flux/pipeline_flux.py` |
+| `kontext_pipeline` | [`src/diffusers/pipelines/flux/pipeline_flux_kontext.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/pipelines/flux/pipeline_flux_kontext.py) |
+| `pipeline_flux` | [`src/diffusers/pipelines/flux/pipeline_flux.py`](https://github.com/huggingface/diffusers/blob/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a/src/diffusers/pipelines/flux/pipeline_flux.py) |
 
 ### Line-by-Line Mapping
 
 | minFLUX block | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
-| Reference VAE encode (.mode()) | `kontext_pipeline._encode_vae_image` | 598-610 | EXACT MATCH |
+| Reference VAE encode (sample=False) | BFL `autoencoder.AutoEncoder.encode` | 308-311 | MATCH (sample flag replaces DiagonalGaussian mode) |
 | Reference position IDs (`[..., 0] = 1`) | `kontext_pipeline.prepare_latents` | 715-720 | EXACT MATCH |
 | Concatenate hidden_states | `kontext_pipeline.__call__` | 1083-1084 | EXACT MATCH |
 | Concatenate img_ids | `kontext_pipeline.__call__` | 1007-1009 | EXACT MATCH |
 | Slice output | `kontext_pipeline.__call__` | 1098 | EXACT MATCH |
 | Transformer forward kwargs | `kontext_pipeline.__call__` | 1088-1097 | EXACT MATCH |
-| All other training logic | `utils/training.py` (imported) | — | INHERITED |
+| All other training logic | `utils/training_utils.py` (imported) | — | INHERITED |

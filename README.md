@@ -1,6 +1,5 @@
 # minFLUX
 
-![minFLUX](assets/flux.jpg)
 A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX tries to be small, clean, interpretable and educational. Since the design space of diffusion models is huge, the purpose of minFLUX is to understand the key model choices in FLUX. minFLUX is also unique in that it is the only implementation of FLUX that is verifiable by referencing the official codebases.
 
 The transformer architectures and algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL reference implementations ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has a companion `.md` file mapping every function to exact source lines at pinned commits. This extensive line-by-line source mapping makes minFLUX credible and verifiable.
@@ -9,38 +8,43 @@ The transformer architectures and algorithms are inferred from the official [dif
 
 **Training** (rectified flow matching):
 
-$$x_t = (1 - \sigma(t)) \cdot x_0 + \sigma(t) \cdot \epsilon \qquad \text{(noisy input)}$$
-
-$$v = \epsilon - x_0 \qquad \text{(velocity prediction)}$$
-
-$$L = \left\| model(x_t, t) - v \right\|^2 \qquad \text{(MSE loss)}$$
+$$\begin{aligned}
+x_t &= (1 - \sigma(t)) \cdot x_0 + \sigma(t) \cdot \epsilon && \text{(noisy input)} \\
+v &= \epsilon - x_0 && \text{(velocity target)} \\
+L &= \left\| model(x_t, t) - v \right\|^2 && \text{(MSE loss)}
+\end{aligned}$$
 
 **Inference** (Euler ODE step):
 
 $$x_{t_{\text{next}}} = x_t + (\sigma(t_{\text{next}}) - \sigma(t)) \cdot model(x_t, t)$$
 
-## FLUX Architecture
+## FLUX.2 Architecture
 
 ```mermaid
 flowchart TD
-    TE["Text Encoder"] --> TextTok["text tokens"]
-    TS["Timestep t"] --> Temb["t_emb (sinusoidal + MLP)"]
-    Pixels["Image"] --> VAE["VAE Encode + Pack 2×2"] --> ImgTok["image tokens"]
+    TE["Text Encoder (Mistral3)"] --> TextTok["text tokens"]
+    TS["Timestep t + Guidance"] --> Temb["temb (sinusoidal + MLP)"]
+    Pixels["Image"] --> VAE["VAE Encode + Patchify 2×2 + BatchNorm"] --> ImgTok["image tokens"]
+    PosIDs["Position IDs (4D)"] --> RoPE["RoPE (theta=2000)"]
 
     TextTok -->|"text stream"| DoubleBlocks
     ImgTok -->|"image stream"| DoubleBlocks
-    Temb -.->|"modulation"| DoubleBlocks
-    Temb -.->|"modulation"| SingleBlocks
+    Temb -.->|"shared modulation"| DoubleBlocks
+    Temb -.->|"shared modulation"| SingleBlocks
+    Temb -.->|"modulation"| OutputProc
+    RoPE -.->|"rotary emb"| DoubleBlocks
+    RoPE -.->|"rotary emb"| SingleBlocks
 
     subgraph dit ["Diffusion Transformer"]
-        DoubleBlocks["Double-Stream Blocks ×N<br/>(Joint Attention + FFN)"]
-        Cat["Concat text + image"]
-        SingleBlocks["Single-Stream Blocks ×M<br/>(Self-Attention + FFN)"]
-        DoubleBlocks --> Cat --> SingleBlocks
+        DoubleBlocks["Double-Stream Blocks ×8<br/>(Joint Attention + SwiGLU FFN)"]
+        CatSeq["Concat text + image"]
+        SingleBlocks["Single-Stream Blocks ×48<br/>(Fused Self-Attention + SwiGLU FFN)"]
+        OutputProc["Discard text → norm_out → proj_out"]
+        DoubleBlocks --> CatSeq --> SingleBlocks --> OutputProc
     end
 
-    SingleBlocks --> Unpack["Unpack → Velocity Prediction"]
-    Unpack -->|"training"| Loss["MSE on velocity prediction"]
+    OutputProc --> Unpack["Unpack → Velocity Prediction"]
+    Unpack -->|"training"| Loss["MSE on velocity"]
     Unpack -->|"inference"| Euler["Euler ODE → VAE Decode → Image"]
 ```
 
@@ -51,12 +55,16 @@ Block details: [FLUX.1 double/single-stream blocks](flux1/model.md#key-design-ch
 | | FLUX.1 | FLUX.2 |
 |---|--------|--------|
 | Text encoder | CLIP + T5 | Mistral3 |
-| VAE z_channels | 16 | 32 |
-| VAE normalization | scale/shift | Patchify (2x2) + BatchNorm |
+| `temb` (modulation signal) | Timestep + guidance + pooled CLIP text | Timestep + guidance only |
+| VAE `z_channels` | 16 | 32 |
+| VAE normalization | Scale/shift | Patchify (2×2) + BatchNorm |
 | FFN | GELU | SwiGLU |
-| Modulation | Per-block AdaLN | Shared across blocks |
-| RoPE | theta=10000, 3 axes | theta=2000, 4 axes |
-| Blocks | 19 double + 38 single | 8 double + 48 single |
+| Single-stream block | Separate attn + MLP | Fused QKV+MLP projection |
+| Modulation | Per-block AdaLN | 3 shared heads (img, txt, single) |
+| RoPE | theta=10000, axes=(16,56,56) | theta=2000, axes=(32,32,32,32) |
+| Position IDs | 3D (ch, H, W) | 4D (T, H, W, L) |
+| Biases | `bias=True` | `bias=False` |
+| Blocks | 19 double + 38 single, 24 heads | 8 double + 48 single, 48 heads |
 
 ## Contributing
 

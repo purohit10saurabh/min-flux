@@ -15,13 +15,13 @@
 
 This document explains `flux2/vae.py`: a minimal FLUX.2 autoencoder. `Flux2AutoEncoder` wraps the same shared `Encoder` and `Decoder` as FLUX.1 but adds `quant_conv` / `post_quant_conv` on the wrapper, mean-only latents (no logvar sampling), and patchify (2x2) plus `BatchNorm2d` normalization instead of scalar scale/shift.
 
-`Flux2AutoEncoder` (L25-73): wrapper around shared `Encoder`/`Decoder`.
+`Flux2AutoEncoder` (L26-72): wrapper around shared `Encoder`/`Decoder`.
 
-- Constructor (L26-50): `Encoder` plus `quant_conv(2*z_ch, 2*z_ch, 1)`, `Decoder` plus `post_quant_conv(z_ch, z_ch, 1)`, `BatchNorm2d(z_ch*4, affine=False)`. `ps=(2,2)` for patchify.
-- `_patchify(z)` (L52-53): maps `(B, C, H, W)` to `(B, C*4, H/2, W/2)` via `einops.rearrange`, matching BFL exactly.
-- `_unpatchify(z)` (L55-56): inverse of `_patchify` via `einops.rearrange`.
-- `encode(x)` (L60-65): `encoder` → `quant_conv` → take mean half of channels → `_patchify` → `BatchNorm` forward (with `bn.eval()`).
-- `decode(z)` (L67-73): `inv_normalize` via running mean/variance (`z * std + mean`) → `_unpatchify` → `post_quant_conv` → `decoder`.
+- Constructor (L27-51): `Encoder` plus `quant_conv(2*z_ch, 2*z_ch, 1)`, `Decoder` plus `post_quant_conv(z_ch, z_ch, 1)`, `BatchNorm2d(z_ch*4, affine=False)`. `ps=(2,2)` for patchify.
+- `_patchify(z)` (L53-54): maps `(B, C, H, W)` to `(B, C*4, H/2, W/2)` via `einops.rearrange`, matching BFL exactly.
+- `_unpatchify(z)` (L56-57): inverse of `_patchify` via `einops.rearrange`.
+- `encode(x)` (L59-64): `encoder` → `quant_conv` → take mean half of channels → `_patchify` → `BatchNorm` forward (with `bn.eval()`).
+- `decode(z)` (L66-72): `inv_normalize` via running mean/variance (`z * std + mean`) → `_unpatchify` → `post_quant_conv` → `decoder`.
 
 ---
 

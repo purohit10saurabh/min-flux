@@ -2,7 +2,7 @@
 
 ## Overview
 
-The FLUX.2 transformer architecture in one file (~350 lines). Same role as `flux1/model.py` for FLUX.1.
+The FLUX.2 transformer architecture in one file (~300 lines). Same role as `flux1/model.py` for FLUX.1.
 
 ## Architecture
 
@@ -56,8 +56,8 @@ flowchart TD
 
 ### Key Design Choices
 
-- **Double-stream blocks** ([`Flux2TransformerBlock`](model.py#L225)): Text and image maintain separate LayerNorm and SwiGLU FFN paths, but share a single joint attention. Both streams produce Q/K/V with separate projections; all three are concatenated across streams, Q and K are RMSNorm-ed and RoPE-encoded, then attend jointly via SDPA and split back by modality. Modulation (shift/scale/gate) comes from the model-level shared `Flux2Modulation` heads — not per-block learned AdaLN.
-- **Single-stream blocks** ([`Flux2SingleTransformerBlock`](model.py#L256)): Text and image tokens are already concatenated. A single fused `to_qkv_mlp_proj` linear produces QKV and MLP input simultaneously. Q and K are RMSNorm-ed and RoPE-encoded. Attention and SwiGLU MLP run in parallel, then a fused `to_out` projects their concatenated outputs. One shared modulation set (shift/scale/gate) per block.
+- **Double-stream blocks** ([`Flux2TransformerBlock`](model.py#L148)): Text and image maintain separate LayerNorm and SwiGLU FFN paths, but share a single joint attention. Both streams produce Q/K/V with separate projections; all three are concatenated across streams, Q and K are RMSNorm-ed and RoPE-encoded, then attend jointly via SDPA and split back by modality. Modulation (shift/scale/gate) comes from the model-level shared `Flux2Modulation` heads — not per-block learned AdaLN.
+- **Single-stream blocks** ([`Flux2SingleTransformerBlock`](model.py#L179)): Text and image tokens are already concatenated. A single fused `to_qkv_mlp_proj` linear produces QKV and MLP input simultaneously. Q and K are RMSNorm-ed and RoPE-encoded. Attention and SwiGLU MLP run in parallel, then a fused `to_out` projects their concatenated outputs. One shared modulation set (shift/scale/gate) per block.
 - **Shared modulation**: Three `Flux2Modulation` heads at model scope (`double_stream_modulation_img`, `double_stream_modulation_txt`, `single_stream_modulation`) compute modulation tensors once from `temb` and broadcast to all blocks of each type.
 - **RoPE**: Rotary embeddings computed separately for image and text position IDs, then concatenated. 4 axes (32+32+32+32 = 128 = head_dim), theta=2000.
 

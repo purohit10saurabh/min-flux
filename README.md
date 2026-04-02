@@ -1,8 +1,8 @@
 # minFLUX
 
-A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX aims to be small, clean, educational and verifiable. Since the design space of diffusion models is huge, the goal of minFLUX is to understand the key design choices behind FLUX. It is also the only implementation of FLUX that is verifiable by referencing the official codebases.
+A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX aims to be small, clean, educational and verifiable. Since the design space of diffusion models is huge, the goal of minFLUX is to understand the key design choices behind FLUX. This is also the only implementation of FLUX that is verifiable by referencing the official codebases.
 
-The model architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has a companion `.md` file extensively mapping every function to exact source lines at pinned commits. 
+The model architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has an accompanying `.md` file with extensive mapping of every function to its exact source lines at pinned commits.
 
 ## Diffusion Equations
 
@@ -66,13 +66,49 @@ Transformer block details: [FLUX.2 double/single-stream blocks](flux2/model.md#k
 | Biases | `bias=True` | `bias=False` |
 | Blocks | 19 double + 38 single, 24 heads | 8 double + 48 single, 48 heads |
 
+## Project Structure
+
+```
+flux1/                          FLUX.1 architecture
+  model.py                        DiT transformer (double + single stream blocks)
+  training.py                     training step + latent pack/unpack + position IDs
+  kontext_training.py             Kontext reference-image conditioned training
+  inference.py                    Euler ODE sampling loop
+  vae.py                          VAE (scale/shift normalization)
+
+flux2/                          FLUX.2 architecture
+  model.py                        DiT transformer (shared modulation, SwiGLU, fused blocks)
+  training.py                     training step + latent pack/unpack + 4D position IDs
+  inference.py                    Euler ODE sampling loop (empirical mu shift)
+  vae.py                          VAE (patchify + BatchNorm)
+
+utils/                          Shared building blocks
+  model.py                        timestep embeddings, RoPE, PosEmbed, AdaLayerNormContinuous, joint attention
+  training.py                     flow-matching noise, velocity loss step, Euler step, training loop
+  vae_utils.py                    VAE encoder/decoder CNN blocks (ResNet, attention, up/down)
+
+tests/
+  test_utils.py                   unit tests for primitives (pack/unpack, sigmas, RoPE, etc.)
+```
+
+Each `.py` file in `flux1/`, `flux2/`, and `utils/` has an accompanying `.md` file with line-by-line mappings to the source-of-truth repos.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+python -m pytest tests/ -v
+```
+
 ## Contributing
 
 Contributions are welcome, especially for:
 
 - **Source-of-truth**: cross-reference code against [diffusers](https://github.com/huggingface/diffusers), [flux](https://github.com/black-forest-labs/flux), and [flux2](https://github.com/black-forest-labs/flux2) and fix any implementation discrepancies
-- **Documentation**: improve the companion `.md` files and update line mappings when diffusers changes
-- **New architectures**: add new FLUX variants following the `flux1/` / `flux2/` pattern (each `.py` with a companion `.md`)
+- **Documentation**: improve the accompanying `.md` files and update line mappings when diffusers changes
+- **Components**: add missing FLUX components or improve existing ones
+
+Feel free to open an issue or submit a pull request.
 
 ## Disclaimer
 
@@ -83,4 +119,4 @@ Since minFLUX is inferred from the official diffusers and BFL repos, the possibl
 - **Simplifications**: Stripping ControlNet, IP-Adapter, gradient checkpointing, KV caching, FSDP/DeepSpeed support, and the attention processor dispatch pattern may introduce subtle incompatibilities with pretrained weights. Hence this will not work with pretrained weights. The minimal model and VAE classes (`flux1/model.py`, `flux2/model.py`, `flux1/vae.py`, `flux2/vae.py`) use different attribute names than diffusers / BFL originals, so `state_dict` keys will not match directly.
 - **FLUX.2 is new**: The FLUX.2 architecture was added to diffusers recently and may still be evolving. The Flux2 files here reflect a snapshot of the codebase at the time of writing.
 
-For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), the BFL references ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)), and the companion `.md` files for the line mappings.
+For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), the BFL references ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)), and the accompanying `.md` files for the line mappings.

@@ -17,42 +17,22 @@ References (source of truth):
    https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/normalization.py
 """
 
-import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.rotary import apply_rotary_emb, get_1d_rotary_pos_embed
+from einops import rearrange
+from utils.model import (
+    get_timestep_embedding, TimestepEmbedding, apply_rotary_emb,
+    PosEmbed, AdaLayerNormContinuous, joint_attention,
+)
 
-
-# --- Sinusoidal Timestep Embeddings (embeddings.py:26-77, 1261-1306) ---
-
-def get_timestep_embedding(timesteps, dim, max_period=10000):
-    half = dim // 2
-    freqs = torch.exp(-math.log(max_period) * torch.arange(half, device=timesteps.device, dtype=torch.float32) / half)
-    args = timesteps[:, None].float() * freqs[None, :]
-    return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-
-
-class TimestepEmbedding(nn.Module):
-    def __init__(self, in_channels, out_channels, bias=False):
-        super().__init__()
-        self.linear_1 = nn.Linear(in_channels, out_channels, bias=bias)
-        self.act = nn.SiLU()
-        self.linear_2 = nn.Linear(out_channels, out_channels, bias=bias)
-
-    def forward(self, sample):
-        return self.linear_2(self.act(self.linear_1(sample)))
-
-
-# --- Flux2 Timestep + Guidance Embedding (transformer_flux2.py:982-1014) ---
 
 class Flux2TimestepEmbedding(nn.Module):
     def __init__(self, embedding_dim, guidance_embeds=True):
         super().__init__()
         self.time_proj = lambda t: get_timestep_embedding(t, 256)
-        self.timestep_embedder = TimestepEmbedding(256, embedding_dim)
-        self.guidance_embedder = TimestepEmbedding(256, embedding_dim) if guidance_embeds else None
+        self.timestep_embedder = TimestepEmbedding(256, embedding_dim, bias=False)
+        self.guidance_embedder = TimestepEmbedding(256, embedding_dim, bias=False) if guidance_embeds else None
 
     def forward(self, timestep, guidance):
         t_emb = self.timestep_embedder(self.time_proj(timestep).to(timestep.dtype))
@@ -61,8 +41,6 @@ class Flux2TimestepEmbedding(nn.Module):
             return t_emb + g_emb
         return t_emb
 
-
-# --- Shared Modulation (transformer_flux2.py:1017-1037) ---
 
 class Flux2Modulation(nn.Module):
     def __init__(self, dim, mod_param_sets=2):
@@ -81,43 +59,6 @@ class Flux2Modulation(nn.Module):
         params = torch.chunk(mod, 3 * mod_param_sets, dim=-1)
         return tuple(params[3 * i: 3 * (i + 1)] for i in range(mod_param_sets))
 
-
-# --- Output Norm (normalization.py:307-351) ---
-
-class AdaLayerNormContinuous(nn.Module):
-    def __init__(self, dim, conditioning_dim, elementwise_affine=False, eps=1e-6):
-        super().__init__()
-        self.silu = nn.SiLU()
-        self.linear = nn.Linear(conditioning_dim, dim * 2, bias=False)
-        self.norm = nn.LayerNorm(dim, elementwise_affine=elementwise_affine, eps=eps)
-
-    def forward(self, x, conditioning):
-        emb = self.linear(self.silu(conditioning).to(x.dtype))
-        scale, shift = emb.chunk(2, dim=1)
-        return self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
-
-
-# --- RoPE (transformer_flux2.py:950-979) ---
-
-class Flux2PosEmbed(nn.Module):
-    def __init__(self, theta=2000, axes_dim=(32, 32, 32, 32)):
-        super().__init__()
-        self.theta = theta
-        self.axes_dim = axes_dim
-
-    def forward(self, ids):
-        cos_out, sin_out = [], []
-        for i in range(len(self.axes_dim)):
-            cos, sin = get_1d_rotary_pos_embed(
-                self.axes_dim[i], ids[..., i].float(), theta=self.theta,
-                repeat_interleave_real=True, use_real=True,
-            )
-            cos_out.append(cos)
-            sin_out.append(sin)
-        return torch.cat(cos_out, dim=-1).to(ids.device), torch.cat(sin_out, dim=-1).to(ids.device)
-
-
-# --- SwiGLU FFN (transformer_flux2.py:283-322) ---
 
 class Flux2SwiGLU(nn.Module):
     def __init__(self):
@@ -142,19 +83,6 @@ class Flux2FeedForward(nn.Module):
         return self.linear_out(self.act_fn(self.linear_in(x)))
 
 
-# --- Joint Attention for double-stream (transformer_flux2.py:325-391, 493-548) ---
-
-def flux2_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb=None):
-    q = torch.cat([q_ctx, q], dim=1) if q_ctx is not None else q
-    k = torch.cat([k_ctx, k], dim=1) if k_ctx is not None else k
-    v = torch.cat([v_ctx, v], dim=1) if v_ctx is not None else v
-    if image_rotary_emb is not None:
-        q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
-        k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-    q, k, v = (t.transpose(1, 2) for t in (q, k, v))
-    return F.scaled_dot_product_attention(q, k, v).transpose(1, 2)
-
-
 class Flux2JointAttention(nn.Module):
     def __init__(self, dim, heads=48, head_dim=128, eps=1e-6):
         super().__init__()
@@ -174,21 +102,17 @@ class Flux2JointAttention(nn.Module):
         self.to_add_out = nn.Linear(inner_dim, dim, bias=False)
 
     def forward(self, x, ctx, image_rotary_emb=None):
-        q = self.norm_q(self.to_q(x).unflatten(-1, (self.heads, -1)))
-        k = self.norm_k(self.to_k(x).unflatten(-1, (self.heads, -1)))
-        v = self.to_v(x).unflatten(-1, (self.heads, -1))
-        q_ctx = self.norm_added_q(self.add_q_proj(ctx).unflatten(-1, (self.heads, -1)))
-        k_ctx = self.norm_added_k(self.add_k_proj(ctx).unflatten(-1, (self.heads, -1)))
-        v_ctx = self.add_v_proj(ctx).unflatten(-1, (self.heads, -1))
-        out = flux2_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb)
-        out = out.flatten(-2).to(q.dtype)
+        h = self.heads
+        q = self.norm_q(rearrange(self.to_q(x), 'b s (h d) -> b s h d', h=h))
+        k = self.norm_k(rearrange(self.to_k(x), 'b s (h d) -> b s h d', h=h))
+        v = rearrange(self.to_v(x), 'b s (h d) -> b s h d', h=h)
+        q_ctx = self.norm_added_q(rearrange(self.add_q_proj(ctx), 'b s (h d) -> b s h d', h=h))
+        k_ctx = self.norm_added_k(rearrange(self.add_k_proj(ctx), 'b s (h d) -> b s h d', h=h))
+        v_ctx = rearrange(self.add_v_proj(ctx), 'b s (h d) -> b s h d', h=h)
+        out = rearrange(joint_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb), 'b s h d -> b s (h d)').to(q.dtype)
         txt_len = ctx.shape[1]
-        ctx_out = self.to_add_out(out[:, :txt_len])
-        img_out = self.to_out(out[:, txt_len:])
-        return img_out, ctx_out
+        return self.to_out(out[:, txt_len:]), self.to_add_out(out[:, :txt_len])
 
-
-# --- Fused parallel self-attention + MLP for single-stream (transformer_flux2.py:568-621, 708-783) ---
 
 class Flux2ParallelSelfAttention(nn.Module):
     def __init__(self, dim, heads=48, head_dim=128, mlp_ratio=3.0, mlp_mult_factor=2, eps=1e-6):
@@ -208,19 +132,18 @@ class Flux2ParallelSelfAttention(nn.Module):
         projected = self.to_qkv_mlp_proj(x)
         qkv, mlp_in = torch.split(projected, [3 * self.inner_dim, self.mlp_hidden_dim * self.mlp_mult_factor], dim=-1)
         q, k, v = qkv.chunk(3, dim=-1)
-        q = self.norm_q(q.unflatten(-1, (self.heads, -1)))
-        k = self.norm_k(k.unflatten(-1, (self.heads, -1)))
-        v = v.unflatten(-1, (self.heads, -1))
+        h = self.heads
+        q = self.norm_q(rearrange(q, 'b s (h d) -> b s h d', h=h))
+        k = self.norm_k(rearrange(k, 'b s (h d) -> b s h d', h=h))
+        v = rearrange(v, 'b s (h d) -> b s h d', h=h)
         if image_rotary_emb is not None:
-            q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
-            k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-        q, k, v = (t.transpose(1, 2) for t in (q, k, v))
-        attn_out = F.scaled_dot_product_attention(q, k, v).transpose(1, 2).flatten(-2).to(q.dtype)
+            q = apply_rotary_emb(q, image_rotary_emb)
+            k = apply_rotary_emb(k, image_rotary_emb)
+        q, k, v = (rearrange(t, 'b s h d -> b h s d') for t in (q, k, v))
+        attn_out = rearrange(F.scaled_dot_product_attention(q, k, v), 'b h s d -> b s (h d)').to(q.dtype)
         mlp_out = self.mlp_act_fn(mlp_in)
         return self.to_out(torch.cat([attn_out, mlp_out], dim=-1))
 
-
-# --- Transformer Blocks (transformer_flux2.py:786-947) ---
 
 class Flux2TransformerBlock(nn.Module):
     def __init__(self, dim, num_heads, head_dim, mlp_ratio=3.0, eps=1e-6):
@@ -265,8 +188,6 @@ class Flux2SingleTransformerBlock(nn.Module):
         return hidden_states + mod_gate * self.attn(norm_x, image_rotary_emb)
 
 
-# --- Main Model (transformer_flux2.py:1040-1382) ---
-
 class Flux2Transformer2DModel(nn.Module):
     def __init__(
         self,
@@ -288,7 +209,7 @@ class Flux2Transformer2DModel(nn.Module):
         self.inner_dim = inner_dim
         self.out_channels = in_channels
 
-        self.pos_embed = Flux2PosEmbed(theta=rope_theta, axes_dim=axes_dims_rope)
+        self.pos_embed = PosEmbed(theta=rope_theta, axes_dim=axes_dims_rope)
         self.time_guidance_embed = Flux2TimestepEmbedding(inner_dim, guidance_embeds)
 
         self.double_stream_modulation_img = Flux2Modulation(inner_dim, mod_param_sets=2)
@@ -307,7 +228,7 @@ class Flux2Transformer2DModel(nn.Module):
             for _ in range(num_single_layers)
         ])
 
-        self.norm_out = AdaLayerNormContinuous(inner_dim, inner_dim, elementwise_affine=False, eps=eps)
+        self.norm_out = AdaLayerNormContinuous(inner_dim, inner_dim, elementwise_affine=False, eps=eps, bias=False)
         self.proj_out = nn.Linear(inner_dim, in_channels, bias=False)
 
     def forward(
@@ -368,9 +289,3 @@ if __name__ == "__main__":
     print(f"Parameters: {n_params / 1e9:.2f}B")
     print(f"\nArchitecture: {model.inner_dim}d, "
           f"{len(model.transformer_blocks)} double + {len(model.single_transformer_blocks)} single blocks")
-    print("\nKey differences from FLUX.1:")
-    print("- Shared modulation (3 Flux2Modulation heads at model level)")
-    print("- SwiGLU activation (not GELU-approximate)")
-    print("- Fused QKV+MLP parallel single-stream blocks")
-    print("- No pooled_projections, guidance always on")
-    print("- RoPE: theta=2000, axes=(32,32,32,32), separate text/image embeddings")

@@ -93,15 +93,10 @@ flowchart TD
 
 | minFLUX class | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
-| `get_timestep_embedding` | `embeddings.get_timestep_embedding` | 26-77 | MATCH (simplified, flip_sin_to_cos=True hardcoded) |
-| `TimestepEmbedding` | `embeddings.TimestepEmbedding` | 1261-1306 | MATCH (stripped cond_proj, post_act) |
 | `TextProjection` | `embeddings.PixArtAlphaTextProjection` | 2191-2217 | MATCH (act_fn="silu" hardcoded) |
 | `FluxTimestepEmbedding` | `embeddings.CombinedTimestepGuidanceTextProjEmbeddings` | 1603-1624 | MATCH (merged guidance/no-guidance variants) |
 | `AdaLayerNormZero` | `normalization.AdaLayerNormZero` | 130-170 | MATCH (stripped num_embeddings, norm_type options) |
 | `AdaLayerNormZeroSingle` | `normalization.AdaLayerNormZeroSingle` | 173-202 | EXACT MATCH (logic) |
-| `AdaLayerNormContinuous` | `normalization.AdaLayerNormContinuous` | 307-351 | MATCH (layer_norm only) |
-| `FluxPosEmbed` | `transformer_flux.FluxPosEmbed` | 494-522 | EXACT MATCH (minus MPS/NPU dtype workaround) |
-| `flux_attention` | `transformer_flux.FluxAttnProcessor.__call__` | 75-140 | MATCH (inlined, uses F.scaled_dot_product_attention) |
 | `FluxJointAttention` | `transformer_flux.FluxAttention` (double-stream) | 275-352 | MATCH (stripped processor dispatch, IP-adapter) |
 | `FluxSingleAttention` | `transformer_flux.FluxAttention` (pre_only=True) | 275-352 | MATCH (pre_only variant) |
 | `FluxTransformerBlock` | `transformer_flux.FluxTransformerBlock` | 409-491 | MATCH (stripped ControlNet residual) |

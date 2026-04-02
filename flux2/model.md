@@ -93,15 +93,10 @@ flowchart TD
 
 | minFLUX class                      | Canonical Source                                                                  | Source Lines     | Verdict                                         |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------- |
-| `get_timestep_embedding`           | `embeddings.get_timestep_embedding`                                               | 26-77            | MATCH (simplified)                              |
-| `TimestepEmbedding`                | `embeddings.TimestepEmbedding`                                                    | 1261-1306        | MATCH (bias=False)                              |
 | `Flux2TimestepEmbedding`           | `transformer_flux2.Flux2TimestepGuidanceEmbeddings`                               | 982-1014         | EXACT MATCH                                     |
 | `Flux2Modulation`                  | `transformer_flux2.Flux2Modulation`                                               | 1017-1037        | EXACT MATCH (incl. split)                       |
-| `AdaLayerNormContinuous`           | `normalization.AdaLayerNormContinuous`                                            | 307-351          | MATCH (bias=False)                              |
-| `Flux2PosEmbed`                    | `transformer_flux2.Flux2PosEmbed`                                                 | 950-979          | EXACT MATCH (minus MPS/NPU workaround)          |
 | `Flux2SwiGLU`                      | `transformer_flux2.Flux2SwiGLU`                                                   | 283-296          | EXACT MATCH                                     |
 | `Flux2FeedForward`                 | `transformer_flux2.Flux2FeedForward`                                              | 299-322          | EXACT MATCH                                     |
-| `flux2_attention`                  | `transformer_flux2.Flux2AttnProcessor.__call__`                                   | 325-391          | MATCH (inlined, F.scaled_dot_product_attention) |
 | `Flux2JointAttention`              | `transformer_flux2.Flux2Attention`                                                | 493-548          | MATCH (stripped processor dispatch)             |
 | `Flux2ParallelSelfAttention`       | `transformer_flux2.Flux2ParallelSelfAttention` + `Flux2ParallelSelfAttnProcessor` | 568-621, 708-783 | MATCH (inlined processor)                       |
 | `Flux2TransformerBlock`            | `transformer_flux2.Flux2TransformerBlock`                                         | 855-947          | EXACT MATCH (logic)                             |

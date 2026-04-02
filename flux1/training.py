@@ -14,57 +14,44 @@ References (source of truth):
 """
 
 import torch
+from einops import rearrange
 
-from utils.training_utils import (
-    compute_density_for_timestep_sampling,
-    compute_loss_weighting_for_sd3,
-    get_sigmas,
-)
-from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
+from utils.training import sample_flow_match_noise, flow_match_loss_step, train_loop
+
+
+def prepare_latent_image_ids(height, width, device, dtype):
+    latent_image_ids = torch.zeros(height, width, 3)
+    latent_image_ids[..., 1] = latent_image_ids[..., 1] + torch.arange(height)[:, None]
+    latent_image_ids[..., 2] = latent_image_ids[..., 2] + torch.arange(width)[None, :]
+    latent_image_ids = latent_image_ids.reshape(height * width, 3)
+    return latent_image_ids.to(device=device, dtype=dtype)
+
+
+def pack_latents(latents):
+    return rearrange(latents, 'b c (h p1) (w p2) -> b (h w) (c p1 p2)', p1=2, p2=2)
+
+
+def unpack_latents(latents, height, width, vae_scale_factor):
+    height = 2 * (int(height) // (vae_scale_factor * 2))
+    width = 2 * (int(width) // (vae_scale_factor * 2))
+    return rearrange(latents, 'b (h w) (c p1 p2) -> b c (h p1) (w p2)',
+                     h=height // 2, w=width // 2, p1=2, p2=2)
 
 
 def flux_training_step(
-    transformer,
-    vae,
-    optimizer,
-    lr_scheduler,
-    pixel_values: torch.Tensor,
-    prompt_embeds: torch.Tensor,
-    pooled_prompt_embeds: torch.Tensor,
-    text_ids: torch.Tensor,
-    accelerator,
-    weight_dtype: torch.dtype,
-    weighting_scheme: str = "none",
-    logit_mean: float = 0.0,
-    logit_std: float = 1.0,
-    mode_scale: float = 1.29,
-    guidance_scale: float = 3.5,
-    max_grad_norm: float = 1.0,
-    num_train_timesteps: int = 1000,
+    transformer, vae, optimizer, lr_scheduler,
+    pixel_values: torch.Tensor, prompt_embeds: torch.Tensor,
+    pooled_prompt_embeds: torch.Tensor, text_ids: torch.Tensor,
+    accelerator, weight_dtype: torch.dtype,
+    weighting_scheme: str = "none", guidance_scale: float = 3.5, max_grad_norm: float = 1.0,
 ):
     model_input = vae.encode(pixel_values).to(dtype=weight_dtype)
-
     latent_image_ids = prepare_latent_image_ids(
-        model_input.shape[0], model_input.shape[2] // 2, model_input.shape[3] // 2,
-        accelerator.device, weight_dtype,
+        model_input.shape[2] // 2, model_input.shape[3] // 2, accelerator.device, weight_dtype,
     )
-
-    noise = torch.randn_like(model_input)
+    noisy_model_input, noise, sigmas, timesteps = sample_flow_match_noise(model_input, weighting_scheme)
     bsz = model_input.shape[0]
-
-    u = compute_density_for_timestep_sampling(
-        weighting_scheme=weighting_scheme, batch_size=bsz,
-        logit_mean=logit_mean, logit_std=logit_std, mode_scale=mode_scale,
-    )
-    indices = (u * num_train_timesteps).long()
-    sigmas = get_sigmas(indices, num_train_timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
-    timesteps = sigmas.flatten() * num_train_timesteps
-    noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
-
-    packed_noisy_model_input = pack_latents(
-        noisy_model_input, batch_size=bsz, num_channels_latents=model_input.shape[1],
-        height=model_input.shape[2], width=model_input.shape[3],
-    )
+    packed_noisy_model_input = pack_latents(noisy_model_input)
 
     guidance = None
     if transformer.guidance_embeds:
@@ -75,25 +62,13 @@ def flux_training_step(
         pooled_projections=pooled_prompt_embeds, encoder_hidden_states=prompt_embeds,
         txt_ids=text_ids, img_ids=latent_image_ids,
     )
-
     model_pred = unpack_latents(
         model_pred, height=model_input.shape[2] * vae.vae_scale_factor,
         width=model_input.shape[3] * vae.vae_scale_factor, vae_scale_factor=vae.vae_scale_factor,
     )
 
-    weighting = compute_loss_weighting_for_sd3(weighting_scheme=weighting_scheme, sigmas=sigmas)
-    target = noise - model_input
-    loss = torch.mean((weighting.float() * (model_pred.float() - target.float()) ** 2).reshape(target.shape[0], -1), 1)
-    loss = loss.mean()
-
-    accelerator.backward(loss)
-    if accelerator.sync_gradients:
-        accelerator.clip_grad_norm_(transformer.parameters(), max_grad_norm)
-    optimizer.step()
-    lr_scheduler.step()
-    optimizer.zero_grad()
-
-    return loss.detach().item()
+    return flow_match_loss_step(model_pred, noise, model_input, sigmas, weighting_scheme,
+                                accelerator, transformer, optimizer, lr_scheduler, max_grad_norm)
 
 
 def flux_training(
@@ -102,29 +77,11 @@ def flux_training(
     weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",
     guidance_scale: float = 3.5, max_grad_norm: float = 1.0,
 ):
-    from tqdm import tqdm
-
-    global_step = 0
-    for epoch in range(num_epochs):
-        transformer.train()
-        progress_bar = tqdm(total=len(train_dataloader), desc=f"Epoch {epoch}", disable=not accelerator.is_local_main_process)
-
-        for batch in train_dataloader:
-            with accelerator.accumulate(transformer):
-                loss = flux_training_step(
-                    transformer=transformer, vae=vae,
-                    optimizer=optimizer, lr_scheduler=lr_scheduler,
-                    pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
-                    pooled_prompt_embeds=batch["pooled_prompt_embeds"], text_ids=batch["text_ids"],
-                    accelerator=accelerator, weight_dtype=weight_dtype,
-                    weighting_scheme=weighting_scheme, guidance_scale=guidance_scale, max_grad_norm=max_grad_norm,
-                )
-
-            if accelerator.sync_gradients:
-                progress_bar.update(1)
-                global_step += 1
-            progress_bar.set_postfix(loss=loss)
-
-        progress_bar.close()
-
-    return global_step
+    step = lambda batch: flux_training_step(
+        transformer=transformer, vae=vae, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
+        pooled_prompt_embeds=batch["pooled_prompt_embeds"], text_ids=batch["text_ids"],
+        accelerator=accelerator, weight_dtype=weight_dtype,
+        weighting_scheme=weighting_scheme, guidance_scale=guidance_scale, max_grad_norm=max_grad_norm,
+    )
+    return train_loop(step, transformer, train_dataloader, accelerator, num_epochs)

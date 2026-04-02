@@ -17,10 +17,10 @@ This document explains `flux1/vae.py`: a minimal FLUX.1 autoencoder. `FluxAutoEn
 ### Canonical Source Files
 
 
-| Short Name    | Full Path                                        |
-| ------------- | ------------------------------------------------ |
-| `autoencoder` | [`src/flux/modules/autoencoder.py`](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/modules/autoencoder.py) |
-| `util`        | [`src/flux/util.py`](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/util.py)                |
+| Short Name    | Full Path                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoencoder` | `[src/flux/modules/autoencoder.py](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/modules/autoencoder.py)` |
+| `util`        | `[src/flux/util.py](https://github.com/black-forest-labs/flux/blob/802fb4713906133fcbd0d8dc5351620ca4773036/src/flux/util.py)`                               |
 
 
 ### Line-by-Line Mapping

@@ -21,22 +21,17 @@ References (source of truth):
 """
 
 import torch
+from einops import rearrange
 
-from utils.training_utils import (
-    compute_density_for_timestep_sampling,
-    compute_loss_weighting_for_sd3,
-    get_sigmas,
-)
+from utils.training import sample_flow_match_noise, flow_match_loss_step, train_loop
 
 
 def pack_latents(latents: torch.Tensor) -> torch.Tensor:
-    batch_size, num_channels, height, width = latents.shape
-    return latents.reshape(batch_size, num_channels, height * width).permute(0, 2, 1)
+    return rearrange(latents, 'b c h w -> b (h w) c')
 
 
 def unpack_latents(latents: torch.Tensor, height: int, width: int) -> torch.Tensor:
-    batch_size, _, num_channels = latents.shape
-    return latents.permute(0, 2, 1).reshape(batch_size, num_channels, height, width)
+    return rearrange(latents, 'b (h w) c -> b c h w', h=height, w=width)
 
 
 def prepare_latent_ids(latents: torch.Tensor) -> torch.Tensor:
@@ -55,50 +50,24 @@ def flux2_training_step(
     transformer, vae, optimizer, lr_scheduler,
     pixel_values: torch.Tensor, prompt_embeds: torch.Tensor, text_ids: torch.Tensor,
     accelerator, weight_dtype: torch.dtype, weighting_scheme: str = "none",
-    logit_mean: float = 0.0, logit_std: float = 1.0, mode_scale: float = 1.29,
     guidance_scale: float = 2.5, max_grad_norm: float = 1.0,
-    num_train_timesteps: int = 1000,
 ):
     model_input = vae.encode(pixel_values).to(dtype=weight_dtype)
-
     latent_ids = prepare_latent_ids(model_input).to(device=accelerator.device, dtype=weight_dtype)
-
-    noise = torch.randn_like(model_input)
+    noisy_model_input, noise, sigmas, timesteps = sample_flow_match_noise(model_input, weighting_scheme)
     bsz = model_input.shape[0]
 
-    u = compute_density_for_timestep_sampling(
-        weighting_scheme=weighting_scheme, batch_size=bsz,
-        logit_mean=logit_mean, logit_std=logit_std, mode_scale=mode_scale,
-    )
-    indices = (u * num_train_timesteps).long()
-    sigmas = get_sigmas(indices, num_train_timesteps, n_dim=model_input.ndim, dtype=model_input.dtype)
-    timesteps = sigmas.flatten() * num_train_timesteps
-    noisy_model_input = (1.0 - sigmas) * model_input + sigmas * noise
-
     packed_noisy_model_input = pack_latents(noisy_model_input)
-
     guidance = torch.full([1], guidance_scale, device=accelerator.device, dtype=torch.float32).expand(bsz)
 
     model_pred = transformer(
         hidden_states=packed_noisy_model_input, timestep=timesteps / 1000, guidance=guidance,
         encoder_hidden_states=prompt_embeds, txt_ids=text_ids, img_ids=latent_ids,
     )
-
     model_pred = unpack_latents(model_pred, model_input.shape[2], model_input.shape[3])
 
-    weighting = compute_loss_weighting_for_sd3(weighting_scheme=weighting_scheme, sigmas=sigmas)
-    target = noise - model_input
-    loss = torch.mean((weighting.float() * (model_pred.float() - target.float()) ** 2).reshape(target.shape[0], -1), 1)
-    loss = loss.mean()
-
-    accelerator.backward(loss)
-    if accelerator.sync_gradients:
-        accelerator.clip_grad_norm_(transformer.parameters(), max_grad_norm)
-    optimizer.step()
-    lr_scheduler.step()
-    optimizer.zero_grad()
-
-    return loss.detach().item()
+    return flow_match_loss_step(model_pred, noise, model_input, sigmas, weighting_scheme,
+                                accelerator, transformer, optimizer, lr_scheduler, max_grad_norm)
 
 
 def flux2_training(
@@ -107,28 +76,10 @@ def flux2_training(
     weight_dtype: torch.dtype = torch.bfloat16, weighting_scheme: str = "none",
     guidance_scale: float = 2.5, max_grad_norm: float = 1.0,
 ):
-    from tqdm import tqdm
-
-    global_step = 0
-    for epoch in range(num_epochs):
-        transformer.train()
-        progress_bar = tqdm(total=len(train_dataloader), desc=f"Epoch {epoch}", disable=not accelerator.is_local_main_process)
-
-        for batch in train_dataloader:
-            with accelerator.accumulate(transformer):
-                loss = flux2_training_step(
-                    transformer=transformer, vae=vae,
-                    optimizer=optimizer, lr_scheduler=lr_scheduler,
-                    pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
-                    text_ids=batch["text_ids"], accelerator=accelerator, weight_dtype=weight_dtype,
-                    weighting_scheme=weighting_scheme, guidance_scale=guidance_scale, max_grad_norm=max_grad_norm,
-                )
-
-            if accelerator.sync_gradients:
-                progress_bar.update(1)
-                global_step += 1
-            progress_bar.set_postfix(loss=loss)
-
-        progress_bar.close()
-
-    return global_step
+    step = lambda batch: flux2_training_step(
+        transformer=transformer, vae=vae, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        pixel_values=batch["pixel_values"], prompt_embeds=batch["prompt_embeds"],
+        text_ids=batch["text_ids"], accelerator=accelerator, weight_dtype=weight_dtype,
+        weighting_scheme=weighting_scheme, guidance_scale=guidance_scale, max_grad_norm=max_grad_norm,
+    )
+    return train_loop(step, transformer, train_dataloader, accelerator, num_epochs)

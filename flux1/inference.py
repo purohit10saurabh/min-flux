@@ -14,7 +14,8 @@ References (source of truth):
 import numpy as np
 import torch
 
-from utils.latent import prepare_latent_image_ids, pack_latents, unpack_latents
+from utils.training import euler_step
+from flux1.training import prepare_latent_image_ids, pack_latents, unpack_latents
 
 
 def calculate_shift(image_seq_len, base_seq_len=256, max_seq_len=4096, base_shift=0.5, max_shift=1.15):
@@ -28,10 +29,6 @@ def get_sigmas(num_inference_steps, image_seq_len):
     sigmas = shift * sigmas / (1 + (shift - 1) * sigmas)
     sigmas = np.append(sigmas, 0.0)
     return torch.from_numpy(sigmas).float()
-
-
-def euler_step(model_output, sigma, sigma_next, sample):
-    return sample + (sigma_next - sigma) * model_output
 
 
 @torch.no_grad()
@@ -48,8 +45,8 @@ def flux_inference(
     num_channels = transformer.in_channels
 
     latents = torch.randn(1, num_channels, latent_height, latent_width, device=device, dtype=dtype, generator=generator)
-    latent_image_ids = prepare_latent_image_ids(1, latent_height // 2, latent_width // 2, device, dtype)
-    latents = pack_latents(latents, 1, num_channels, latent_height, latent_width)
+    latent_image_ids = prepare_latent_image_ids(latent_height // 2, latent_width // 2, device, dtype)
+    latents = pack_latents(latents)
 
     image_seq_len = latents.shape[1]
     sigmas = get_sigmas(num_inference_steps, image_seq_len).to(device)

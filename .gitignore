@@ -1,2 +1,6 @@
+.DS_Store
+*.pyc
 .cursor/
+.pytest_cache/
+__pycache__/
 other/

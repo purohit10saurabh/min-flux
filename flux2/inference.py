@@ -18,8 +18,8 @@ References (source of truth):
 import numpy as np
 import torch
 
-from flux1.inference import euler_step
-from flux2.training import pack_latents, prepare_latent_ids
+from utils.training import euler_step
+from flux2.training import pack_latents, unpack_latents, prepare_latent_ids
 
 
 def compute_empirical_mu(image_seq_len: int, num_steps: int) -> float:
@@ -72,5 +72,4 @@ def flux2_inference(
         )
         latents = euler_step(noise_pred, sigmas[i], sigmas[i + 1], latents)
 
-    latents = latents.permute(0, 2, 1).reshape(1, -1, latent_height // 2, latent_width // 2)
-    return vae.decode(latents)
+    return vae.decode(unpack_latents(latents, latent_height // 2, latent_width // 2))

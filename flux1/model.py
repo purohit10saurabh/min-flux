@@ -12,32 +12,13 @@ References (source of truth):
    https://github.com/black-forest-labs/flux
 """
 
-import math
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from utils.rotary import apply_rotary_emb, get_1d_rotary_pos_embed
-
-
-# --- Sinusoidal Timestep Embeddings (embeddings.py:26-77, 1261-1306, 1309-1325) ---
-
-def get_timestep_embedding(timesteps, dim, max_period=10000):
-    half = dim // 2
-    freqs = torch.exp(-math.log(max_period) * torch.arange(half, device=timesteps.device, dtype=torch.float32) / half)
-    args = timesteps[:, None].float() * freqs[None, :]
-    return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
-
-
-class TimestepEmbedding(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.linear_1 = nn.Linear(in_channels, out_channels)
-        self.act = nn.SiLU()
-        self.linear_2 = nn.Linear(out_channels, out_channels)
-
-    def forward(self, sample):
-        return self.linear_2(self.act(self.linear_1(sample)))
+from einops import rearrange
+from utils.model import (
+    get_timestep_embedding, TimestepEmbedding,
+    PosEmbed, AdaLayerNormContinuous, joint_attention,
+)
 
 
 class TextProjection(nn.Module):
@@ -50,8 +31,6 @@ class TextProjection(nn.Module):
     def forward(self, x):
         return self.linear_2(self.act(self.linear_1(x)))
 
-
-# --- Combined Timestep + Guidance + Text Embeddings (embeddings.py:1584-1624) ---
 
 class FluxTimestepEmbedding(nn.Module):
     def __init__(self, embedding_dim, pooled_projection_dim, guidance_embeds=False):
@@ -68,8 +47,6 @@ class FluxTimestepEmbedding(nn.Module):
             t_emb = t_emb + g_emb
         return t_emb + self.text_embedder(pooled_projection)
 
-
-# --- Adaptive Layer Norms (normalization.py:130-202, 307-351) ---
 
 class AdaLayerNormZero(nn.Module):
     def __init__(self, dim):
@@ -99,52 +76,6 @@ class AdaLayerNormZeroSingle(nn.Module):
         return x, gate_msa
 
 
-class AdaLayerNormContinuous(nn.Module):
-    def __init__(self, dim, conditioning_dim, elementwise_affine=False, eps=1e-6):
-        super().__init__()
-        self.silu = nn.SiLU()
-        self.linear = nn.Linear(conditioning_dim, dim * 2)
-        self.norm = nn.LayerNorm(dim, elementwise_affine=elementwise_affine, eps=eps)
-
-    def forward(self, x, conditioning):
-        emb = self.linear(self.silu(conditioning).to(x.dtype))
-        scale, shift = emb.chunk(2, dim=1)
-        return self.norm(x) * (1 + scale)[:, None, :] + shift[:, None, :]
-
-
-# --- RoPE Positional Embedding (transformer_flux.py:494-522) ---
-
-class FluxPosEmbed(nn.Module):
-    def __init__(self, theta=10000, axes_dim=(16, 56, 56)):
-        super().__init__()
-        self.theta = theta
-        self.axes_dim = axes_dim
-
-    def forward(self, ids):
-        cos_out, sin_out = [], []
-        for i in range(ids.shape[-1]):
-            cos, sin = get_1d_rotary_pos_embed(
-                self.axes_dim[i], ids[:, i].float(), theta=self.theta,
-                repeat_interleave_real=True, use_real=True,
-            )
-            cos_out.append(cos)
-            sin_out.append(sin)
-        return torch.cat(cos_out, dim=-1).to(ids.device), torch.cat(sin_out, dim=-1).to(ids.device)
-
-
-# --- Joint Attention (transformer_flux.py:75-140, 275-352 simplified) ---
-
-def flux_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb=None):
-    q = torch.cat([q_ctx, q], dim=1) if q_ctx is not None else q
-    k = torch.cat([k_ctx, k], dim=1) if k_ctx is not None else k
-    v = torch.cat([v_ctx, v], dim=1) if v_ctx is not None else v
-    if image_rotary_emb is not None:
-        q = apply_rotary_emb(q, image_rotary_emb, sequence_dim=1)
-        k = apply_rotary_emb(k, image_rotary_emb, sequence_dim=1)
-    q, k, v = (t.transpose(1, 2) for t in (q, k, v))
-    return F.scaled_dot_product_attention(q, k, v).transpose(1, 2)
-
-
 class FluxJointAttention(nn.Module):
     def __init__(self, dim, heads=24, head_dim=128):
         super().__init__()
@@ -164,14 +95,14 @@ class FluxJointAttention(nn.Module):
         self.to_add_out = nn.Linear(inner_dim, dim)
 
     def forward(self, x, ctx, image_rotary_emb=None):
-        q = self.norm_q(self.to_q(x).unflatten(-1, (self.heads, -1)))
-        k = self.norm_k(self.to_k(x).unflatten(-1, (self.heads, -1)))
-        v = self.to_v(x).unflatten(-1, (self.heads, -1))
-        q_ctx = self.norm_added_q(self.add_q_proj(ctx).unflatten(-1, (self.heads, -1)))
-        k_ctx = self.norm_added_k(self.add_k_proj(ctx).unflatten(-1, (self.heads, -1)))
-        v_ctx = self.add_v_proj(ctx).unflatten(-1, (self.heads, -1))
-        out = flux_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb)
-        out = out.flatten(-2)
+        h = self.heads
+        q = self.norm_q(rearrange(self.to_q(x), 'b s (h d) -> b s h d', h=h))
+        k = self.norm_k(rearrange(self.to_k(x), 'b s (h d) -> b s h d', h=h))
+        v = rearrange(self.to_v(x), 'b s (h d) -> b s h d', h=h)
+        q_ctx = self.norm_added_q(rearrange(self.add_q_proj(ctx), 'b s (h d) -> b s h d', h=h))
+        k_ctx = self.norm_added_k(rearrange(self.add_k_proj(ctx), 'b s (h d) -> b s h d', h=h))
+        v_ctx = rearrange(self.add_v_proj(ctx), 'b s (h d) -> b s h d', h=h)
+        out = rearrange(joint_attention(q, k, v, q_ctx, k_ctx, v_ctx, image_rotary_emb), 'b s h d -> b s (h d)')
         txt_len = ctx.shape[1]
         return self.to_add_out(out[:, :txt_len]), self.to_out(out[:, txt_len:])
 
@@ -188,14 +119,12 @@ class FluxSingleAttention(nn.Module):
         self.to_v = nn.Linear(dim, inner_dim, bias=True)
 
     def forward(self, x, image_rotary_emb=None):
-        q = self.norm_q(self.to_q(x).unflatten(-1, (self.heads, -1)))
-        k = self.norm_k(self.to_k(x).unflatten(-1, (self.heads, -1)))
-        v = self.to_v(x).unflatten(-1, (self.heads, -1))
-        out = flux_attention(q, k, v, None, None, None, image_rotary_emb)
-        return out.flatten(-2)
+        h = self.heads
+        q = self.norm_q(rearrange(self.to_q(x), 'b s (h d) -> b s h d', h=h))
+        k = self.norm_k(rearrange(self.to_k(x), 'b s (h d) -> b s h d', h=h))
+        v = rearrange(self.to_v(x), 'b s (h d) -> b s h d', h=h)
+        return rearrange(joint_attention(q, k, v, None, None, None, image_rotary_emb), 'b s h d -> b s (h d)')
 
-
-# --- Transformer Blocks (transformer_flux.py:355-491) ---
 
 class FluxTransformerBlock(nn.Module):
     def __init__(self, dim, num_heads, head_dim, eps=1e-6):
@@ -246,8 +175,6 @@ class FluxSingleTransformerBlock(nn.Module):
         return x[:, :txt_len], x[:, txt_len:]
 
 
-# --- Main Model (transformer_flux.py:525-778) ---
-
 class FluxTransformer2DModel(nn.Module):
     def __init__(
         self,
@@ -268,7 +195,7 @@ class FluxTransformer2DModel(nn.Module):
         self.out_channels = in_channels
         self.guidance_embeds = guidance_embeds
 
-        self.pos_embed = FluxPosEmbed(theta=10000, axes_dim=axes_dims_rope)
+        self.pos_embed = PosEmbed(theta=10000, axes_dim=axes_dims_rope)
         self.time_text_embed = FluxTimestepEmbedding(inner_dim, pooled_projection_dim, guidance_embeds)
         self.context_embedder = nn.Linear(joint_attention_dim, inner_dim)
         self.x_embedder = nn.Linear(in_channels, inner_dim)
@@ -324,12 +251,3 @@ if __name__ == "__main__":
     print(f"Parameters: {n_params / 1e9:.2f}B")
     print(f"\nArchitecture: {model.inner_dim}d, "
           f"{len(model.transformer_blocks)} double + {len(model.single_transformer_blocks)} single blocks")
-    print("\nComponents (bottom-up):")
-    print("1. FluxPosEmbed - RoPE positional encoding")
-    print("2. FluxTimestepEmbedding - timestep + guidance + pooled text")
-    print("3. AdaLayerNormZero/Single/Continuous - adaptive modulation")
-    print("4. FluxJointAttention - double-stream joint attention (text + image)")
-    print("5. FluxSingleAttention - single-stream self-attention")
-    print("6. FluxTransformerBlock - double-stream block")
-    print("7. FluxSingleTransformerBlock - single-stream block")
-    print("8. FluxTransformer2DModel - full model")

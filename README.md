@@ -120,3 +120,7 @@ Since minFLUX is inferred from the official diffusers and BFL repos, the possibl
 - **FLUX.2 is new**: The FLUX.2 architecture was added to diffusers recently and may still be evolving. The Flux2 files here reflect a snapshot of the codebase at the time of writing.
 
 For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), the BFL references ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)), and the accompanying `.md` files for the line mappings.
+
+## License
+
+[Apache License 2.0](LICENSE).

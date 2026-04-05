@@ -46,7 +46,6 @@ class ResnetBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.in_channels = in_channels
-        out_channels = in_channels if out_channels is None else out_channels
         self.out_channels = out_channels
         self.norm1 = nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
@@ -82,7 +81,7 @@ class Upsample(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, resolution: int, in_channels: int, ch: int, ch_mult: list[int],
+    def __init__(self, in_channels: int, ch: int, ch_mult: list[int],
                  num_res_blocks: int, z_channels: int):
         super().__init__()
         self.num_resolutions = len(ch_mult)
@@ -101,7 +100,6 @@ class Encoder(nn.Module):
                 block_in = block_out
             down = nn.Module()
             down.block = block
-            down.attn = nn.ModuleList()
             if i_level != self.num_resolutions - 1:
                 down.downsample = Downsample(block_in)
             self.down.append(down)
@@ -119,8 +117,6 @@ class Encoder(nn.Module):
         for i_level in range(self.num_resolutions):
             for i_block in range(self.num_res_blocks):
                 h = self.down[i_level].block[i_block](hs[-1])
-                if len(self.down[i_level].attn) > 0:
-                    h = self.down[i_level].attn[i_block](h)
                 hs.append(h)
             if i_level != self.num_resolutions - 1:
                 hs.append(self.down[i_level].downsample(hs[-1]))
@@ -131,7 +127,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, ch: int, out_ch: int, ch_mult: list[int], num_res_blocks: int,
-                 in_channels: int, resolution: int, z_channels: int):
+                 z_channels: int):
         super().__init__()
         self.num_resolutions = len(ch_mult)
         self.num_res_blocks = num_res_blocks
@@ -154,7 +150,6 @@ class Decoder(nn.Module):
                 block_in = block_out
             up = nn.Module()
             up.block = block
-            up.attn = nn.ModuleList()
             if i_level != 0:
                 up.upsample = Upsample(block_in)
             self.up.insert(0, up)
@@ -171,8 +166,6 @@ class Decoder(nn.Module):
         for i_level in reversed(range(self.num_resolutions)):
             for i_block in range(self.num_res_blocks + 1):
                 h = self.up[i_level].block[i_block](h)
-                if len(self.up[i_level].attn) > 0:
-                    h = self.up[i_level].attn[i_block](h)
             if i_level != 0:
                 h = self.up[i_level].upsample(h)
 

@@ -96,12 +96,12 @@ flowchart TD
 | `Flux2TimestepEmbedding`           | `transformer_flux2.Flux2TimestepGuidanceEmbeddings`                               | 982-1014         | EXACT MATCH                                     |
 | `Flux2Modulation`                  | `transformer_flux2.Flux2Modulation`                                               | 1017-1037        | EXACT MATCH (incl. split)                       |
 | `Flux2SwiGLU`                      | `transformer_flux2.Flux2SwiGLU`                                                   | 283-296          | EXACT MATCH                                     |
-| `Flux2FeedForward`                 | `transformer_flux2.Flux2FeedForward`                                              | 299-322          | EXACT MATCH                                     |
-| `Flux2JointAttention`              | `transformer_flux2.Flux2Attention`                                                | 493-548          | MATCH (stripped processor dispatch)             |
+| `Flux2FeedForward`                 | `transformer_flux2.Flux2FeedForward`                                              | 299-322          | MATCH (`dim_out` now required, no `None` fallback)  |
+| `Flux2JointAttention`              | `transformer_flux2.Flux2Attention`                                                | 493-548          | MATCH (stripped processor dispatch, no-op `Dropout(0.0)`) |
 | `Flux2ParallelSelfAttention`       | `transformer_flux2.Flux2ParallelSelfAttention` + `Flux2ParallelSelfAttnProcessor` | 568-621, 708-783 | MATCH (inlined processor)                       |
 | `Flux2TransformerBlock`            | `transformer_flux2.Flux2TransformerBlock`                                         | 855-947          | EXACT MATCH (logic)                             |
 | `Flux2SingleTransformerBlock`      | `transformer_flux2.Flux2SingleTransformerBlock`                                   | 786-852          | MATCH (simplified, no split_hidden_states)      |
-| `Flux2Transformer2DModel.__init`__ | `transformer_flux2.Flux2Transformer2DModel.__init_`_                              | 1094-1174        | MATCH (stripped KV cache, grad ckpt)            |
+| `Flux2Transformer2DModel.__init`__ | `transformer_flux2.Flux2Transformer2DModel.__init_`_                              | 1094-1174        | MATCH (stripped KV cache, grad ckpt, `out_channels` attr) |
 | `Flux2Transformer2DModel.forward`  | `transformer_flux2.Flux2Transformer2DModel.forward`                               | 1228-1381        | MATCH (stripped KV cache, grad ckpt)            |
 
 

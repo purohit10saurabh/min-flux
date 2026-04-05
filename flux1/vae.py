@@ -34,8 +34,8 @@ class FluxAutoEncoder(nn.Module):
         self.shift_factor = shift_factor
         self.vae_scale_factor = 2 ** (len(ch_mult) - 1)
 
-        self.encoder = Encoder(resolution, in_channels, ch, ch_mult, num_res_blocks, z_channels)
-        self.decoder = Decoder(ch, out_ch, ch_mult, num_res_blocks, in_channels, resolution, z_channels)
+        self.encoder = Encoder(in_channels, ch, ch_mult, num_res_blocks, z_channels)
+        self.decoder = Decoder(ch, out_ch, ch_mult, num_res_blocks, z_channels)
 
     def encode(self, x: Tensor, sample: bool = True) -> Tensor:
         mean, logvar = self.encoder(x).chunk(2, dim=1)

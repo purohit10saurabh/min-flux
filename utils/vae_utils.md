@@ -18,20 +18,20 @@
 ### Line-by-Line Mapping
 
 
-| minFLUX symbol | Lines   | `flux1_ae`                                   | `flux2_ae` | Verdict                                                                                                                         |
-| -------------- | ------- | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `swish`        | 17-18   | 21-22                                        | 20-21      | EXACT MATCH                                                                                                                     |
-| `AttnBlock`    | 22-42   | 25-52 (`AttnBlock`, `attention` + `forward`) | 24-51      | MATCH (attention inlined into `forward`; `rearrange` calls match BFL exactly)                                                   |
-| `ResnetBlock`  | 44-62   | 55-82                                        | 54-81      | MATCH (`forward` compressed; same ops)                                                                                          |
-| `Downsample`   | 65-71   | 85-95                                        | 84-94      | MATCH (`pad`+`conv` one-liner)                                                                                                  |
-| `Upsample`     | 74-80   | 98-106                                       | 97-105     | MATCH (`interpolate`+`conv` one-liner)                                                                                          |
-| `Encoder`      | 83-128  | 109-180                                      | 108-181    | MATCH core tower; `flux2_ae` adds `quant_conv` in `Encoder` (lines 119, 180); minFLUX omits it (applied in `flux2/vae.py`)      |
-| `Decoder`      | 131-178 | 183-264                                      | 184-268    | MATCH core tower; `flux2_ae` adds `post_quant_conv` in `Decoder` (lines 196, 240); minFLUX omits it (applied in `flux2/vae.py`) |
+| minFLUX symbol | Lines    | `flux1_ae`                                   | `flux2_ae` | Verdict                                                                                                                         |
+| -------------- | -------- | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `swish`        | 18-19    | 21-22                                        | 20-21      | EXACT MATCH                                                                                                                     |
+| `AttnBlock`    | 22-42    | 25-52 (`AttnBlock`, `attention` + `forward`) | 24-51      | MATCH (attention inlined into `forward`; `rearrange` calls match BFL exactly)                                                   |
+| `ResnetBlock`  | 45-62    | 55-82                                        | 54-81      | MATCH (`forward` compressed; same ops; `out_channels is None` guard removed — all callers pass explicit `int`)                  |
+| `Downsample`   | 65-71    | 85-95                                        | 84-94      | MATCH (`pad`+`conv` one-liner)                                                                                                  |
+| `Upsample`     | 74-80    | 98-106                                       | 97-105     | MATCH (`interpolate`+`conv` one-liner)                                                                                          |
+| `Encoder`      | 83-125   | 109-180                                      | 108-181    | MATCH core tower; stripped unused `resolution` param and empty `down.attn` lists + dead branches; `flux2_ae` `quant_conv` omitted (applied in `flux2/vae.py`) |
+| `Decoder`      | 128-172  | 183-264                                      | 184-268    | MATCH core tower; stripped unused `resolution`+`in_channels` params and empty `up.attn` lists + dead branches; `flux2_ae` `post_quant_conv` omitted (applied in `flux2/vae.py`) |
 
 
 ### Notes
 
 - **Attention layout**: BFL and minFLUX both use `rearrange(q, "b c h w -> b 1 (h w) c")` for the `(batch, 1, seq, channels)` layout required by `scaled_dot_product_attention`, then `rearrange` back to `NCHW`.
-- **Optional level attention**: Both BFL files build `down.attn` / `up.attn` as empty `ModuleList`s in the default configuration; the `len(...) > 0` branches are unused for standard FLUX checkpoints but preserve the same loop structure.
+- **Optional level attention**: BFL builds `down.attn` / `up.attn` as empty `ModuleList`s. minFLUX removes them and their dead `len(...) > 0` forward branches since standard FLUX checkpoints never populate them.
 - **FLUX.1 vs FLUX.2 wrapping**: `flux1_ae` pairs `Encoder`/`Decoder` with `DiagonalGaussian` and scale/shift on `AutoEncoder`. `flux2_ae` keeps `quant_conv` / `post_quant_conv` inside the encoder/decoder modules; minFLUX keeps a single `Encoder`/`Decoder` and lets `flux2/vae.py` own the 1x1 convs and patch/BatchNorm path.
 

@@ -6,7 +6,7 @@ This document explains `flux1/vae.py`: a minimal FLUX.1 autoencoder. `FluxAutoEn
 
 `FluxAutoEncoder` (L18-49): thin wrapper around shared `Encoder`/`Decoder` from `utils/vae_utils.py`.
 
-- Constructor (L19-38): builds `Encoder`, `Decoder`. Stores `scale_factor=0.3611`, `shift_factor=0.1159`, `vae_scale_factor=8`. Default `z_channels=16`.
+- Constructor (L19-38): builds `Encoder(in_channels, ch, ch_mult, num_res_blocks, z_channels)`, `Decoder(ch, out_ch, ch_mult, num_res_blocks, z_channels)`. Stores `scale_factor=0.3611`, `shift_factor=0.1159`, `vae_scale_factor=8`. Default `z_channels=16`.
 - `encode(x, sample=True)` (L40-46): encoder output is split into mean and logvar; if `sample` is true, draws from the diagonal Gaussian, else uses the mean; then applies `scale_factor * (z - shift_factor)`. Returns the scaled latent directly. The `sample` flag supports stochastic latents for training targets and deterministic encoding for Kontext-style reference latents.
 - `decode(z)` (L48-49): applies inverse affine `z / scale_factor + shift_factor`, then the decoder. Returns a pixel tensor directly.
 

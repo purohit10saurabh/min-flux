@@ -40,12 +40,6 @@ def prepare_latent_ids(latents: torch.Tensor) -> torch.Tensor:
     return ids.unsqueeze(0).expand(batch_size, -1, -1)
 
 
-def prepare_text_ids(prompt_embeds: torch.Tensor) -> torch.Tensor:
-    batch_size, seq_len, _ = prompt_embeds.shape
-    ids = torch.cartesian_prod(torch.arange(1), torch.arange(1), torch.arange(1), torch.arange(seq_len))
-    return ids.unsqueeze(0).expand(batch_size, -1, -1)
-
-
 def flux2_training_step(
     transformer, vae, optimizer, lr_scheduler,
     pixel_values: torch.Tensor, prompt_embeds: torch.Tensor, text_ids: torch.Tensor,

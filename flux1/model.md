@@ -97,11 +97,11 @@ flowchart TD
 | `FluxTimestepEmbedding` | `embeddings.CombinedTimestepGuidanceTextProjEmbeddings` | 1603-1624 | MATCH (merged guidance/no-guidance variants) |
 | `AdaLayerNormZero` | `normalization.AdaLayerNormZero` | 130-170 | MATCH (stripped num_embeddings, norm_type options) |
 | `AdaLayerNormZeroSingle` | `normalization.AdaLayerNormZeroSingle` | 173-202 | EXACT MATCH (logic) |
-| `FluxJointAttention` | `transformer_flux.FluxAttention` (double-stream) | 275-352 | MATCH (stripped processor dispatch, IP-adapter) |
+| `FluxJointAttention` | `transformer_flux.FluxAttention` (double-stream) | 275-352 | MATCH (stripped processor dispatch, IP-adapter, no-op `Dropout(0.0)`) |
 | `FluxSingleAttention` | `transformer_flux.FluxAttention` (pre_only=True) | 275-352 | MATCH (pre_only variant) |
-| `FluxTransformerBlock` | `transformer_flux.FluxTransformerBlock` | 409-491 | MATCH (stripped ControlNet residual) |
+| `FluxTransformerBlock` | `transformer_flux.FluxTransformerBlock` | 409-491 | MATCH (stripped ControlNet residual, unused `eps` param) |
 | `FluxSingleTransformerBlock` | `transformer_flux.FluxSingleTransformerBlock` | 355-406 | EXACT MATCH (logic) |
-| `FluxTransformer2DModel.__init__` | `transformer_flux.FluxTransformer2DModel.__init__` | 579-635 | MATCH (stripped patch_size, out_channels, grad ckpt) |
+| `FluxTransformer2DModel.__init__` | `transformer_flux.FluxTransformer2DModel.__init__` | 579-635 | MATCH (stripped patch_size, `out_channels` attr, grad ckpt) |
 | `FluxTransformer2DModel.forward` | `transformer_flux.FluxTransformer2DModel.forward` | 637-778 | MATCH (stripped ControlNet, IP-adapter, grad ckpt) |
 | FeedForward (inline `nn.Sequential`) | `attention.FeedForward` with `gelu-approximate` | 1696-1742 | MATCH (inlined as Linear->GELU->Linear) |
 

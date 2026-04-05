@@ -40,9 +40,9 @@ class Flux2AutoEncoder(nn.Module):
         self.ps = (2, 2)
         self.vae_scale_factor = 2 ** (len(ch_mult) - 1)
 
-        self.encoder = Encoder(resolution, in_channels, ch, ch_mult, num_res_blocks, z_channels)
+        self.encoder = Encoder(in_channels, ch, ch_mult, num_res_blocks, z_channels)
         self.quant_conv = nn.Conv2d(2 * z_channels, 2 * z_channels, 1)
-        self.decoder = Decoder(ch, out_ch, ch_mult, num_res_blocks, in_channels, resolution, z_channels)
+        self.decoder = Decoder(ch, out_ch, ch_mult, num_res_blocks, z_channels)
         self.post_quant_conv = nn.Conv2d(z_channels, z_channels, 1)
 
         self.bn = nn.BatchNorm2d(

@@ -86,7 +86,7 @@ class FluxJointAttention(nn.Module):
         self.to_q = nn.Linear(dim, inner_dim, bias=True)
         self.to_k = nn.Linear(dim, inner_dim, bias=True)
         self.to_v = nn.Linear(dim, inner_dim, bias=True)
-        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim, bias=True), nn.Dropout(0.0))
+        self.to_out = nn.Linear(inner_dim, dim, bias=True)
         self.norm_added_q = nn.RMSNorm(head_dim, eps=1e-6)
         self.norm_added_k = nn.RMSNorm(head_dim, eps=1e-6)
         self.add_q_proj = nn.Linear(dim, inner_dim)
@@ -127,7 +127,7 @@ class FluxSingleAttention(nn.Module):
 
 
 class FluxTransformerBlock(nn.Module):
-    def __init__(self, dim, num_heads, head_dim, eps=1e-6):
+    def __init__(self, dim, num_heads, head_dim):
         super().__init__()
         self.norm1 = AdaLayerNormZero(dim)
         self.norm1_context = AdaLayerNormZero(dim)
@@ -192,7 +192,6 @@ class FluxTransformer2DModel(nn.Module):
         inner_dim = num_attention_heads * attention_head_dim
         self.in_channels = in_channels
         self.inner_dim = inner_dim
-        self.out_channels = in_channels
         self.guidance_embeds = guidance_embeds
 
         self.pos_embed = PosEmbed(theta=10000, axes_dim=axes_dims_rope)

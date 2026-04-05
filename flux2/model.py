@@ -71,10 +71,9 @@ class Flux2SwiGLU(nn.Module):
 
 
 class Flux2FeedForward(nn.Module):
-    def __init__(self, dim, dim_out=None, mult=3.0):
+    def __init__(self, dim, dim_out, mult=3.0):
         super().__init__()
         inner_dim = int(dim * mult)
-        dim_out = dim_out or dim
         self.linear_in = nn.Linear(dim, inner_dim * 2, bias=False)
         self.act_fn = Flux2SwiGLU()
         self.linear_out = nn.Linear(inner_dim, dim_out, bias=False)
@@ -93,7 +92,7 @@ class Flux2JointAttention(nn.Module):
         self.to_v = nn.Linear(dim, inner_dim, bias=False)
         self.norm_q = nn.RMSNorm(head_dim, eps=eps)
         self.norm_k = nn.RMSNorm(head_dim, eps=eps)
-        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim, bias=False), nn.Dropout(0.0))
+        self.to_out = nn.Linear(inner_dim, dim, bias=False)
         self.add_q_proj = nn.Linear(dim, inner_dim, bias=False)
         self.add_k_proj = nn.Linear(dim, inner_dim, bias=False)
         self.add_v_proj = nn.Linear(dim, inner_dim, bias=False)
@@ -207,7 +206,6 @@ class Flux2Transformer2DModel(nn.Module):
         inner_dim = num_attention_heads * attention_head_dim
         self.in_channels = in_channels
         self.inner_dim = inner_dim
-        self.out_channels = in_channels
 
         self.pos_embed = PosEmbed(theta=rope_theta, axes_dim=axes_dims_rope)
         self.time_guidance_embed = Flux2TimestepEmbedding(inner_dim, guidance_embeds)

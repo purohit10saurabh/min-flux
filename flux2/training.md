@@ -140,26 +140,25 @@ These are imported from `utils/training_utils.py`.
 |---------------------------|-------|------------------|--------------|---------|
 | `Flux2AutoEncoder._patchify` | flux2/vae.py 52-54 | BFL `autoencoder.AutoEncoder.encode` (rearrange) | 318-324 | MATCH |
 | `Flux2AutoEncoder._unpatchify` | flux2/vae.py 56-58 | BFL `autoencoder.AutoEncoder.decode` (rearrange) | 329-334 | MATCH (decode unpatchify) |
-| `pack_latents` | 32-34 | `pipeline_flux2._pack_latents` | 473-481 | EXACT MATCH |
-| `unpack_latents` | 37-39 | Inverse of `_pack_latents` | N/A | DERIVED (simple permute+reshape inverse) |
-| `prepare_latent_ids` | 42-45 | `pipeline_flux2._prepare_latent_ids` | 375-404 | MATCH (simplified, no docstring) |
-| `prepare_text_ids` | 48-51 | `pipeline_flux2._prepare_text_ids` | 356-372 | MATCH (simplified) |
-| VAE encode (quant_conv, mean, patchify, BN) | 62 | BFL `autoencoder.AutoEncoder.encode` | 314-325 | MATCH (minimal VAE uses `quant_conv`; BFL uses encoder moments) |
-| Position ID preparation | 64 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
-| Timestep sampling + sigmas | 69-75 | `utils/training.compute_density_for_timestep_sampling`, `get_sigmas` (diffusers `training_utils` + FlowMatch sigma table) | 23-40, 54-58 | IMPORTED / inlined (no `noise_scheduler`) |
-| Noise interpolation | 76 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
-| Pack noisy input | 78 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
-| Guidance (always on) | 80 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |
-| Transformer forward | 82-85 | `pipeline_flux2.__call__` denoise | 971-980 | EXACT MATCH (no `pooled_projections`) |
-| Unpack model prediction | 87 | Inverse of pack (training only) | N/A | DERIVED |
-| Loss computation | 89-92 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from utils.training |
+| `pack_latents` | 29-30 | `pipeline_flux2._pack_latents` | 473-481 | EXACT MATCH |
+| `unpack_latents` | 33-34 | Inverse of `_pack_latents` | N/A | DERIVED (simple permute+reshape inverse) |
+| `prepare_latent_ids` | 37-40 | `pipeline_flux2._prepare_latent_ids` | 375-404 | MATCH (simplified, no docstring) |
+| VAE encode (quant_conv, mean, patchify, BN) | 49 | BFL `autoencoder.AutoEncoder.encode` | 314-325 | MATCH (minimal VAE uses `quant_conv`; BFL uses encoder moments) |
+| Position ID preparation | 50 | `pipeline_flux2.prepare_latents` | 646-647 | EXACT MATCH |
+| Timestep sampling + sigmas | 51-52 | `utils/training.compute_density_for_timestep_sampling`, `get_sigmas` (diffusers `training_utils` + FlowMatch sigma table) | 23-40, 54-58 | IMPORTED / inlined (no `noise_scheduler`) |
+| Noise interpolation | 51 | Same as FLUX.1 (rectified flow) | N/A | SHARED |
+| Pack noisy input | 54 | `pipeline_flux2.prepare_latents` | 649 | EXACT MATCH |
+| Guidance (always on) | 55 | `pipeline_flux2.__call__` | 948-949 | EXACT MATCH |
+| Transformer forward | 57-60 | `pipeline_flux2.__call__` denoise | 971-980 | EXACT MATCH (no `pooled_projections`) |
+| Unpack model prediction | 61 | Inverse of pack (training only) | N/A | DERIVED |
+| Loss computation | 63-64 | Same as FLUX.1 (flow matching MSE) | N/A | IMPORTED from utils.training |
 
 ### Notes
 
 - **`unpack_latents`**: Not directly from diffusers. The pipeline uses `_unpack_latents_with_ids` (position-ID-based scatter) for variable-resolution support. For fixed-resolution training, the simple inverse of `pack_latents` is mathematically equivalent and avoids the scatter overhead.
 - **Encode path**: The minimal `Flux2AutoEncoder.encode` takes the mean latent (no diagonal Gaussian `.sample()`); BFL `AutoEncoder.encode` matches patchify + BatchNorm after the mean split.
 - **`guidance_scale=2.5`**: Default from `Flux2Pipeline.__call__`. FLUX.1 uses 3.5.
-- **`text_ids`**: Expected shape `(B, seq_len, 4)` with coordinates `(T=0, H=0, W=0, L=token_idx)`. Can be pre-computed with `prepare_text_ids(prompt_embeds)` or supplied in the batch.
+- **`text_ids`**: Expected shape `(B, seq_len, 4)` with coordinates `(T=0, H=0, W=0, L=token_idx)`. Must be supplied in the batch (see `pipeline_flux2._prepare_text_ids` for reference).
 
 ---
 

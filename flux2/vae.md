@@ -17,7 +17,7 @@ This document explains `flux2/vae.py`: a minimal FLUX.2 autoencoder. `Flux2AutoE
 
 `Flux2AutoEncoder` (L26-72): wrapper around shared `Encoder`/`Decoder`.
 
-- Constructor (L27-51): `Encoder` plus `quant_conv(2*z_ch, 2*z_ch, 1)`, `Decoder` plus `post_quant_conv(z_ch, z_ch, 1)`, `BatchNorm2d(z_ch*4, affine=False)`. `ps=(2,2)` for patchify.
+- Constructor (L27-51): `Encoder(in_channels, ch, ch_mult, num_res_blocks, z_channels)` plus `quant_conv(2*z_ch, 2*z_ch, 1)`, `Decoder(ch, out_ch, ch_mult, num_res_blocks, z_channels)` plus `post_quant_conv(z_ch, z_ch, 1)`, `BatchNorm2d(z_ch*4, affine=False)`. `ps=(2,2)` for patchify.
 - `_patchify(z)` (L53-54): maps `(B, C, H, W)` to `(B, C*4, H/2, W/2)` via `einops.rearrange`, matching BFL exactly.
 - `_unpatchify(z)` (L56-57): inverse of `_patchify` via `einops.rearrange`.
 - `encode(x)` (L59-64): `encoder` → `quant_conv` → take mean half of channels → `_patchify` → `BatchNorm` forward (with `bn.eval()`).

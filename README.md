@@ -1,8 +1,21 @@
 # minFLUX
 
-A minimal implementation of key components of [FLUX](https://bfl.ai/models/flux-2) diffusion transformers. minFLUX aims to be small, clean, educational and verifiable. Since the design space of diffusion models is huge, the goal of minFLUX is to understand the key design choices behind FLUX. This is also the only implementation of FLUX that is verifiable by referencing the official codebases.
+**Minimal PyTorch implementation of FLUX diffusion transformers**
 
-The model architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE comes from the BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has an accompanying `.md` file with extensive mapping of every function to its exact source lines at pinned commits.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
+
+A minimal, educational PyTorch implementation of [FLUX.1](https://bfl.ai/models/flux-kontext) and [FLUX.2](https://bfl.ai/models/flux-2) diffusion transformers (DiT) by [Black Forest Labs](https://bfl.ai). Built for understanding rectified flow matching, joint attention, and the key design choices behind FLUX -- with verifiable line-by-line source mappings to the official codebases.
+
+The diffusion models architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE architectures are from the official BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036) and [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has an accompanying `.md` file with extensive mapping of every function to its exact source lines at pinned commits.
+
+## What's Inside
+
+- **FLUX.1 and FLUX.2 DiT architectures** -- double-stream and single-stream transformer blocks with joint attention
+- **Rectified flow matching** -- training with velocity prediction and logit-normal timestep sampling
+- **Euler ODE inference** -- sampling loop with configurable timestep schedules
+- **VAE encoder/decoder** -- scale/shift normalization (FLUX.1) and patchify + BatchNorm (FLUX.2)
+- **Verifiable line-by-line source mappings** -- to the official codebases
 
 ## Diffusion Equations
 
@@ -20,33 +33,7 @@ $$x_{t_{\text{next}}} = x_t + (\sigma(t_{\text{next}}) - \sigma(t)) \cdot model(
 
 ## FLUX.2 Architecture Overview
 
-```mermaid
-flowchart TD
-    TE["Text Encoder (Mistral3)"] --> TextTok["text tokens"]
-    TS["Timestep t + Guidance"] --> Temb["temb (sinusoidal + MLP)"]
-    Pixels["Image"] --> VAE["VAE Encode + Patchify 2×2 + BatchNorm"] --> ImgTok["image tokens"]
-    PosIDs["Position IDs (4D)"] --> RoPE["RoPE (theta=2000)"]
-
-    TextTok -->|"text stream"| DoubleBlocks
-    ImgTok -->|"image stream"| DoubleBlocks
-    Temb -.->|"shared modulation"| DoubleBlocks
-    Temb -.->|"shared modulation"| SingleBlocks
-    Temb -.->|"modulation"| OutputProc
-    RoPE -.->|"rotary emb"| DoubleBlocks
-    RoPE -.->|"rotary emb"| SingleBlocks
-
-    subgraph dit ["Diffusion Transformer"]
-        DoubleBlocks["Double-Stream Blocks ×8<br/>(Joint Attention + SwiGLU FFN)"]
-        CatSeq["Concat text + image"]
-        SingleBlocks["Single-Stream Blocks ×48<br/>(Fused Self-Attention + SwiGLU FFN)"]
-        OutputProc["Discard text → norm_out → proj_out"]
-        DoubleBlocks --> CatSeq --> SingleBlocks --> OutputProc
-    end
-
-    OutputProc --> Unpack["Unpack → Velocity Prediction"]
-    Unpack -->|"training"| Loss["MSE on velocity"]
-    Unpack -->|"inference"| Euler["Euler ODE → VAE Decode → Image"]
-```
+![FLUX.2 Architecture](assets/flux2-architecture.svg)
 
 Transformer block details: [FLUX.2 double/single-stream blocks](flux2/model.md#key-design-choices)
 
@@ -66,29 +53,29 @@ Transformer block details: [FLUX.2 double/single-stream blocks](flux2/model.md#k
 | Biases | `bias=True` | `bias=False` |
 | Blocks | 19 double + 38 single, 24 heads | 8 double + 48 single, 48 heads |
 
-## Project Structure
+## Repository Structure
 
 ```
-flux1/                          FLUX.1 architecture
-  model.py                        DiT transformer (double + single stream blocks)
-  training.py                     training step + latent pack/unpack + position IDs
-  kontext_training.py             Kontext reference-image conditioned training
-  inference.py                    Euler ODE sampling loop
-  vae.py                          VAE (scale/shift normalization)
+flux1/                     FLUX.1
+  model.py                   DiT (double + single stream)
+  training.py                flow matching + pack/unpack
+  kontext_training.py        reference-image conditioning
+  inference.py               Euler ODE sampling
+  vae.py                     VAE (scale/shift)
 
-flux2/                          FLUX.2 architecture
-  model.py                        DiT transformer (shared modulation, SwiGLU, fused blocks)
-  training.py                     training step + latent pack/unpack + 4D position IDs
-  inference.py                    Euler ODE sampling loop (empirical mu shift)
-  vae.py                          VAE (patchify + BatchNorm)
+flux2/                     FLUX.2
+  model.py                   DiT (shared modulation, SwiGLU)
+  training.py                flow matching + 4D position IDs
+  inference.py               Euler ODE (empirical mu shift)
+  vae.py                     VAE (patchify + BatchNorm)
 
-utils/                          Shared building blocks
-  model.py                        timestep embeddings, RoPE, PosEmbed, AdaLayerNormContinuous, joint attention
-  training.py                     flow-matching noise, velocity loss step, Euler step, training loop
-  vae_utils.py                    VAE encoder/decoder CNN blocks (ResNet, attention, up/down)
+utils/                     shared
+  model.py                   embeddings, RoPE, attention, norms
+  training.py                noise, loss, Euler step, train loop
+  vae_utils.py               ResNet, attention, up/down blocks
 
 tests/
-  test_utils.py                   unit tests for primitives (pack/unpack, sigmas, RoPE, etc.)
+  test_utils.py              unit tests
 ```
 
 Each `.py` file in `flux1/`, `flux2/`, and `utils/` has an accompanying `.md` file with line-by-line mappings to the source-of-truth repos.
@@ -116,11 +103,19 @@ Since minFLUX is inferred from the official diffusers and BFL repos, the possibl
 
 - **AI-assisted**: The code is written with the help of AI, referencing the diffusers and BFL repos. It was verified line-by-line against the source but not executed end-to-end.
 - **Upstream code changes**: Source-of-truth line numbers reference specific commits ([diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), [flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). These codebases change frequently, so functions may move, rename, or change signature.
-- **Simplifications**: Stripping ControlNet, IP-Adapter, gradient checkpointing, KV caching, FSDP/DeepSpeed support, and the attention processor dispatch pattern may introduce subtle incompatibilities with pretrained weights. Hence this will not work with pretrained weights. The minimal model and VAE classes (`flux1/model.py`, `flux2/model.py`, `flux1/vae.py`, `flux2/vae.py`) use different attribute names than diffusers / BFL originals, so `state_dict` keys will not match directly.
+- **Simplifications**: Stripping ControlNet, IP-Adapter, gradient checkpointing, KV caching, FSDP/DeepSpeed support, and the attention processor dispatch pattern makes it incompatible with pretrained weights.
 - **FLUX.2 is new**: The FLUX.2 architecture was added to diffusers recently and may still be evolving. The Flux2 files here reflect a snapshot of the codebase at the time of writing.
 
-For verification, cross-reference with the [diffusers source](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), the BFL references ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)), and the accompanying `.md` files for the line mappings.
+## Citation
 
-## License
+If you use this repository, please cite:
 
-[Apache License 2.0](LICENSE).
+```bibtex
+@misc{minflux2026,
+  author = {Purohit, Saurabh},
+  title  = {minFLUX: Minimal Implementation of FLUX Diffusion Transformers},
+  year   = {2026},
+  publisher = {GitHub},
+  url    = {https://github.com/purohit10saurabh/minFLUX}
+}
+```

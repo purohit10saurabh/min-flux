@@ -1,8 +1,6 @@
-# Flux2 Transformer Model Documentation
+# Flux2 Model Documentation
 
-## Overview
-
-The FLUX.2 transformer architecture in one file (~300 lines). Same role as `flux1/model.py` for FLUX.1.
+The complete FLUX.2 transformer architecture in one file (~300 lines). Similar to `flux1/model.py` for FLUX.1.
 
 ## Architecture
 

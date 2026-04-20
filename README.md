@@ -1,21 +1,21 @@
 # minFLUX
 
-**Minimal PyTorch implementation of FLUX diffusion transformers**
+**(Unofficial) Minimal PyTorch implementation of FLUX diffusion transformers**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-A minimal, educational PyTorch implementation of [FLUX.1](https://bfl.ai/models/flux-kontext) and [FLUX.2](https://bfl.ai/models/flux-2) diffusion transformers (DiT) by [Black Forest Labs](https://bfl.ai). Built for understanding rectified flow matching, joint attention, and the key design choices behind FLUX -- with verifiable line-by-line source mappings to the official codebases.
+A simplified educational PyTorch implementation of [FLUX.1](https://bfl.ai/models/flux-kontext) and [FLUX.2](https://bfl.ai/models/flux-2) diffusion transformers (DiT) by [Black Forest Labs](https://bfl.ai). Built for understanding rectified flow matching, joint attention, and the key design choices behind FLUX with verifiable line-by-line source mappings to the official codebases.
 
 The diffusion models architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE architectures are from the official BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036) and [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has an accompanying `.md` file with extensive mapping of every function to its exact source lines at pinned commits.
 
 ## What's Inside
 
-- **FLUX.1 and FLUX.2 DiT architectures** -- double-stream and single-stream transformer blocks with joint attention
-- **Rectified flow matching** -- training with velocity prediction and logit-normal timestep sampling
-- **Euler ODE inference** -- sampling loop with configurable timestep schedules
-- **VAE encoder/decoder** -- scale/shift normalization (FLUX.1) and patchify + BatchNorm (FLUX.2)
-- **Verifiable line-by-line source mappings** -- to the official codebases
+- **FLUX.1 and FLUX.2 DiT architectures**- Double-stream and single-stream transformer blocks with joint attention
+- **Rectified flow matching**- Training with velocity prediction and logit-normal timestep sampling
+- **Euler ODE inference**- Sampling loop with configurable timestep schedules
+- **VAE encoder/decoder**- Resnet and attention based architectures with latent normalization
+- **Verifiable line-by-line source mappings**- To the official codebases
 
 ## Diffusion Equations
 
@@ -33,13 +33,13 @@ $$x_{t_{\text{next}}} = x_t + (\sigma(t_{\text{next}}) - \sigma(t)) \cdot model(
 
 ## FLUX.2 Architecture Overview
 
-![FLUX.2 Architecture](assets/flux2-architecture.svg)
+![FLUX.2 Architecture Overview](assets/flux2-architecture-overview.svg)
 
-Transformer block details: [FLUX.2 double/single-stream blocks](flux2/model.md#key-design-choices)
+Detailed architecture: [FLUX.2 Model Architecture](flux2/model.md)
 
-## FLUX.1 vs FLUX.2 Comparison
+## Few differences between FLUX.1 and FLUX.2
 
-| | FLUX.1 | FLUX.2 |
+| Component | FLUX.1 | FLUX.2 |
 |---|--------|--------|
 | Text encoder | CLIP + T5 | Mistral3 |
 | `temb` (modulation signal) | Timestep + guidance + pooled CLIP text | Timestep + guidance only |
@@ -89,17 +89,16 @@ python -m pytest tests/ -v
 
 ## Contributing
 
-Contributions are welcome, especially for:
+Contributions are greatly welcome, especially for:
+- **Source-of-truth**: cross-reference code against [diffusers](https://github.com/huggingface/diffusers), [flux](https://github.com/black-forest-labs/flux), and [flux2](https://github.com/black-forest-labs/flux2) and fix any implementation discrepancies.
+- **Documentation**: improve the accompanying `.md` files and update line mappings when diffusers changes.
+- **Components**: add missing FLUX components or improve existing ones.
 
-- **Source-of-truth**: cross-reference code against [diffusers](https://github.com/huggingface/diffusers), [flux](https://github.com/black-forest-labs/flux), and [flux2](https://github.com/black-forest-labs/flux2) and fix any implementation discrepancies
-- **Documentation**: improve the accompanying `.md` files and update line mappings when diffusers changes
-- **Components**: add missing FLUX components or improve existing ones
-
-Feel free to open an issue or submit a pull request.
+Feel free to [open an issue](https://github.com/purohit10saurabh/minFLUX/issues) or [create a pull request](https://github.com/purohit10saurabh/minFLUX/pulls).
 
 ## Disclaimer
 
-Since minFLUX is inferred from the official diffusers and BFL repos, the possible sources of inaccuracies in the code can be:
+Since minFLUX is inferred from the official diffusers and BFL repos, the possible sources of bugs in the code are:
 
 - **AI-assisted**: The code is written with the help of AI, referencing the diffusers and BFL repos. It was verified line-by-line against the source but not executed end-to-end.
 - **Upstream code changes**: Source-of-truth line numbers reference specific commits ([diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a), [flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036), [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). These codebases change frequently, so functions may move, rename, or change signature.

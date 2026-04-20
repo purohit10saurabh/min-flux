@@ -1,10 +1,6 @@
-# Flux Transformer Model Documentation
-
-## Overview
+# Flux1 Model Documentation
 
 The complete FLUX.1 transformer architecture in one file (~250 lines).
-
-This file defines `FluxJointAttention + FluxTransformerBlock + FluxTransformer2DModel` using `nn.Linear`, `nn.LayerNorm`, `nn.RMSNorm`, and `F.scaled_dot_product_attention`.
 
 ## Architecture
 

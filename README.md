@@ -1,11 +1,15 @@
-# minFLUX
+# toyFLUX
 
-**(Unofficial) Minimal PyTorch implementation of FLUX diffusion transformers**
+**A toy implementation of FLUX diffusion transformers**
 
+[![Stars](https://img.shields.io/github/stars/purohit10saurabh/toyFLUX?color=yellow&style=flat&label=%E2%AD%90%20Stars)](https://github.com/purohit10saurabh/toyFLUX/stargazers)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/downloads/release/python-3100/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-red)](https://pytorch.org/get-started/locally/)
+[![Diffusers](https://img.shields.io/badge/Diffusers-0.14%2B-green)](https://github.com/huggingface/diffusers)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-A simplified educational PyTorch implementation of [FLUX.1](https://bfl.ai/models/flux-kontext) and [FLUX.2](https://bfl.ai/models/flux-2) diffusion transformers (DiT) by [Black Forest Labs](https://bfl.ai). Built for understanding rectified flow matching, joint attention, and the key design choices behind FLUX with verifiable line-by-line source mappings to the official codebases.
+A toy project to learn about the [FLUX.1](https://bfl.ai/models/flux-kontext) and [FLUX.2](https://bfl.ai/models/flux-2) diffusion transformers (DiT) by [Black Forest Labs](https://bfl.ai). Built for understanding rectified flow matching, joint attention, and the key design choices behind FLUX.
 
 The diffusion models architectures and training algorithms are inferred from the official [diffusers](https://github.com/huggingface/diffusers/tree/cbf4d9a3c384ef97d6b0e40c9846dd9e0e41886a) repo. The VAE architectures are from the official BFL repos ([flux](https://github.com/black-forest-labs/flux/tree/802fb4713906133fcbd0d8dc5351620ca4773036) and [flux2](https://github.com/black-forest-labs/flux2/tree/50fe5162777813d869182b139e83b10743caef15)). Each `.py` file has an accompanying `.md` file with extensive mapping of every function to its exact source lines at pinned commits.
 
@@ -94,11 +98,11 @@ Contributions are greatly welcome, especially for:
 - **Documentation**: improve the accompanying `.md` files and update line mappings when diffusers changes.
 - **Components**: add missing FLUX components or improve existing ones.
 
-Feel free to [open an issue](https://github.com/purohit10saurabh/minFLUX/issues) or [create a pull request](https://github.com/purohit10saurabh/minFLUX/pulls).
+Feel free to [open an issue](https://github.com/purohit10saurabh/toyFLUX/issues) or [create a pull request](https://github.com/purohit10saurabh/toyFLUX/pulls).
 
 ## Disclaimer
 
-Since minFLUX is inferred from the official diffusers and BFL repos, the possible sources of bugs in the code are:
+Since toyFLUX is inferred from the official diffusers and BFL repos, the possible sources of bugs in the code are:
 
 - **AI-assisted**: This repo is vibe-coded. It is written with the help of AI, referencing the diffusers and BFL repos. Some training details are inferred from other works like dreambooth.
 - **Simplifications**: Stripping ControlNet, IP-Adapter, gradient checkpointing, KV caching, FSDP/DeepSpeed support, and the attention processor dispatch pattern makes it incompatible with pretrained weights.
@@ -109,11 +113,11 @@ Since minFLUX is inferred from the official diffusers and BFL repos, the possibl
 If you use this repository, please cite it as:
 
 ```bibtex
-@misc{minflux2026,
+@misc{toyFLUX2026,
   author = {Purohit, Saurabh},
-  title  = {minFLUX: Minimal Pytorch Implementation of FLUX Diffusion Transformers},
+  title  = {toyFLUX: Minimal Pytorch Implementation of FLUX Diffusion Transformers},
   year   = {2026},
   publisher = {GitHub},
-  url    = {https://github.com/purohit10saurabh/minFLUX}
+  url    = {https://github.com/purohit10saurabh/toyFLUX}
 }
 ```

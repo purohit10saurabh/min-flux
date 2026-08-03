@@ -22,7 +22,7 @@
 ### Line-by-Line Mapping
 
 
-| minFLUX symbol            | Canonical Source                                                                                | Source Lines      | Verdict                                                           |
+| toyFLUX symbol            | Canonical Source                                                                                | Source Lines      | Verdict                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------------------- |
 | `get_timestep_embedding`  | `embeddings.get_timestep_embedding`                                                             | 26-77             | EXACT MATCH                                                       |
 | `TimestepEmbedding`       | `embeddings.TimestepEmbedding`                                                                  | 1261-1306         | SIMPLIFIED (keeps only `in_channels`, `out_channels`, `bias`)     |

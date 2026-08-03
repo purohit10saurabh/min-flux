@@ -18,7 +18,7 @@
 ### Line-by-Line Mapping
 
 
-| minFLUX symbol | Lines    | `flux1_ae`                                   | `flux2_ae` | Verdict                                                                                                                         |
+| toyFLUX symbol | Lines    | `flux1_ae`                                   | `flux2_ae` | Verdict                                                                                                                         |
 | -------------- | -------- | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `swish`        | 18-19    | 21-22                                        | 20-21      | EXACT MATCH                                                                                                                     |
 | `AttnBlock`    | 22-42    | 25-52 (`AttnBlock`, `attention` + `forward`) | 24-51      | MATCH (attention inlined into `forward`; `rearrange` calls match BFL exactly)                                                   |
@@ -31,7 +31,7 @@
 
 ### Notes
 
-- **Attention layout**: BFL and minFLUX both use `rearrange(q, "b c h w -> b 1 (h w) c")` for the `(batch, 1, seq, channels)` layout required by `scaled_dot_product_attention`, then `rearrange` back to `NCHW`.
-- **Optional level attention**: BFL builds `down.attn` / `up.attn` as empty `ModuleList`s. minFLUX removes them and their dead `len(...) > 0` forward branches since standard FLUX checkpoints never populate them.
-- **FLUX.1 vs FLUX.2 wrapping**: `flux1_ae` pairs `Encoder`/`Decoder` with `DiagonalGaussian` and scale/shift on `AutoEncoder`. `flux2_ae` keeps `quant_conv` / `post_quant_conv` inside the encoder/decoder modules; minFLUX keeps a single `Encoder`/`Decoder` and lets `flux2/vae.py` own the 1x1 convs and patch/BatchNorm path.
+- **Attention layout**: BFL and toyFLUX both use `rearrange(q, "b c h w -> b 1 (h w) c")` for the `(batch, 1, seq, channels)` layout required by `scaled_dot_product_attention`, then `rearrange` back to `NCHW`.
+- **Optional level attention**: BFL builds `down.attn` / `up.attn` as empty `ModuleList`s. toyFLUX removes them and their dead `len(...) > 0` forward branches since standard FLUX checkpoints never populate them.
+- **FLUX.1 vs FLUX.2 wrapping**: `flux1_ae` pairs `Encoder`/`Decoder` with `DiagonalGaussian` and scale/shift on `AutoEncoder`. `flux2_ae` keeps `quant_conv` / `post_quant_conv` inside the encoder/decoder modules; toyFLUX keeps a single `Encoder`/`Decoder` and lets `flux2/vae.py` own the 1x1 convs and patch/BatchNorm path.
 

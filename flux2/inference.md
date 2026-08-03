@@ -37,7 +37,7 @@ FLUX.2's transformer does not take pooled text embeddings.
 
 ### Line-by-Line Mapping
 
-| minFLUX function / block | Canonical Source | Source Lines | Verdict |
+| toyFLUX function / block | Canonical Source | Source Lines | Verdict |
 |---------------------------|------------------|--------------|---------|
 | `compute_empirical_mu` | `pipeline_flux2.compute_empirical_mu` | 159-174 | EXACT MATCH |
 | `get_sigmas_flux2` (linspace + exp(mu) shift) | BFL `sampling.generalized_time_snr_shift` + `sampling.get_schedule` | 240-248 | MATCH (inlined, rearranged) |

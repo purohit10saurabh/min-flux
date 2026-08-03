@@ -136,7 +136,7 @@ These are imported from `utils/training_utils.py`.
 
 ### Line-by-Line Mapping
 
-| minFLUX function / block | Lines | Canonical Source | Source Lines | Verdict |
+| toyFLUX function / block | Lines | Canonical Source | Source Lines | Verdict |
 |---------------------------|-------|------------------|--------------|---------|
 | `Flux2AutoEncoder._patchify` | flux2/vae.py 52-54 | BFL `autoencoder.AutoEncoder.encode` (rearrange) | 318-324 | MATCH |
 | `Flux2AutoEncoder._unpatchify` | flux2/vae.py 56-58 | BFL `autoencoder.AutoEncoder.decode` (rearrange) | 329-334 | MATCH (decode unpatchify) |

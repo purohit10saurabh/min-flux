@@ -26,7 +26,7 @@ This document explains `flux1/vae.py`: a minimal FLUX.1 autoencoder. `FluxAutoEn
 ### Line-by-Line Mapping
 
 
-| minFLUX function / block                                              | Canonical Source                         | Source Lines                                                             | Verdict                                                                                   |
+| toyFLUX function / block                                              | Canonical Source                         | Source Lines                                                             | Verdict                                                                                   |
 | --------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `FluxAutoEncoder.__init__` (`Encoder`, `Decoder`, `vae_scale_factor`) | `AutoEncoder.__init__`                   | 282-306                                                                  | MATCH (shared `utils.vae` backbone; BFL defines `Encoder`/`Decoder` in same file 109-264) |
 | `scale_factor`, `shift_factor`, `z_channels`                          | `AutoEncoder` fields; `util` `ae_params` | `autoencoder` 305-306; `util` 318-327 (representative `ae_params` block) | MATCH                                                                                     |
@@ -39,5 +39,5 @@ This document explains `flux1/vae.py`: a minimal FLUX.1 autoencoder. `FluxAutoEn
 ### Notes
 
 - **DiagonalGaussian**: BFL wraps sampling in `DiagonalGaussian` with a constructor `sample` flag. Here the same logic lives inside `encode(..., sample=True)` so one module can do training (stochastic) and deterministic encoding without swapping submodules.
-- **Backbone**: `Encoder` and `Decoder` implementations are shared with other minFLUX code via `utils/vae_utils.py`; behavior is intended to align with BFL `Encoder`/`Decoder` in `autoencoder.py`.
+- **Backbone**: `Encoder` and `Decoder` implementations are shared with other toyFLUX code via `utils/vae_utils.py`; behavior is intended to align with BFL `Encoder`/`Decoder` in `autoencoder.py`.
 

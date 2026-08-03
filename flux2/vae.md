@@ -39,9 +39,9 @@ This document explains `flux2/vae.py`: a minimal FLUX.2 autoencoder. `Flux2AutoE
 ### Line-by-Line Mapping
 
 
-| minFLUX function / block                                       | Canonical Source                | Source Lines     | Verdict                                                                                                                            |
+| toyFLUX function / block                                       | Canonical Source                | Source Lines     | Verdict                                                                                                                            |
 | -------------------------------------------------------------- | ------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `Flux2AutoEncoder.__init_`_ (`Encoder`, `Decoder`, `bn`, `ps`) | `AutoEncoder.__init__`          | 271-302          | MATCH (`quant_conv` / `post_quant_conv` live on minFLUX wrapper; BFL attaches them inside `Encoder` / `Decoder`, 108-181, 184-268) |
+| `Flux2AutoEncoder.__init_`_ (`Encoder`, `Decoder`, `bn`, `ps`) | `AutoEncoder.__init__`          | 271-302          | MATCH (`quant_conv` / `post_quant_conv` live on toyFLUX wrapper; BFL attaches them inside `Encoder` / `Decoder`, 108-181, 184-268) |
 | `_patchify` / `_unpatchify`                                    | `encode` / `decode` `rearrange` | 318-323, 329-334 | EXACT MATCH (`rearrange` patterns identical to BFL)                                                                                 |
 | `encode` (`quant_conv`, mean chunk, patchify, `bn`)            | `AutoEncoder.encode`            | 314-325          | EXACT MATCH (composition; conv placement differs as noted)                                                                         |
 | `decode` `inv_normalize`                                       | `AutoEncoder.inv_normalize`     | 308-312          | EXACT MATCH (same `eps` on variance sqrt)                                                                                          |
@@ -51,7 +51,7 @@ This document explains `flux2/vae.py`: a minimal FLUX.2 autoencoder. `Flux2AutoE
 
 ### Notes
 
-- **Shared backbone**: Moving `quant_conv` and `post_quant_conv` out of `Encoder`/`Decoder` lets minFLUX reuse `utils.vae.Encoder` and `utils.vae.Decoder` for both FLUX.1 and FLUX.2; BFL keeps those convs inside the respective module classes.
-- **Patchify**: Both BFL and minFLUX use `einops.rearrange` with identical patterns for patchify/unpatchify.
+- **Shared backbone**: Moving `quant_conv` and `post_quant_conv` out of `Encoder`/`Decoder` lets toyFLUX reuse `utils.vae.Encoder` and `utils.vae.Decoder` for both FLUX.1 and FLUX.2; BFL keeps those convs inside the respective module classes.
+- **Patchify**: Both BFL and toyFLUX use `einops.rearrange` with identical patterns for patchify/unpatchify.
 - `**bn.eval()` in `encode`/`decode`**: Matches BFL `normalize` / `inv_normalize` always running the batch norm in eval mode for fixed running statistics.
 

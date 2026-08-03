@@ -46,7 +46,7 @@ This is the BFL reference formula `exp(mu) / (exp(mu) + (1/t - 1))` (from [`src/
 
 ### Line-by-Line Mapping
 
-| minFLUX function / block | Canonical Source | Source Lines | Verdict |
+| toyFLUX function / block | Canonical Source | Source Lines | Verdict |
 |---------------------------|------------------|--------------|---------|
 | `calculate_shift` | `pipeline_flux.calculate_shift` | 74-84 | EXACT MATCH |
 | `get_sigmas` (linspace + exp(mu) shift + append 0) | BFL `sampling.time_shift` + `sampling.get_schedule` | 277-305 | MATCH (inlined, rearranged) |

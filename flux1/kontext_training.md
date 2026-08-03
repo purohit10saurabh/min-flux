@@ -57,7 +57,7 @@ The dataloader must provide `batch["reference_pixel_values"]` in addition to the
 
 ### Line-by-Line Mapping
 
-| minFLUX block | Canonical Source | Source Lines | Verdict |
+| toyFLUX block | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
 | Reference VAE encode (sample=False) | BFL `autoencoder.AutoEncoder.encode` | 308-311 | MATCH (sample flag replaces DiagonalGaussian mode) |
 | Reference position IDs (`[..., 0] = 1`) | `kontext_pipeline.prepare_latents` | 715-720 | EXACT MATCH |

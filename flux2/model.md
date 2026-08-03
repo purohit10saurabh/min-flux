@@ -89,7 +89,7 @@ flowchart TD
 ### Line-by-Line Mapping
 
 
-| minFLUX class                      | Canonical Source                                                                  | Source Lines     | Verdict                                         |
+| toyFLUX class                      | Canonical Source                                                                  | Source Lines     | Verdict                                         |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------- |
 | `Flux2TimestepEmbedding`           | `transformer_flux2.Flux2TimestepGuidanceEmbeddings`                               | 982-1014         | EXACT MATCH                                     |
 | `Flux2Modulation`                  | `transformer_flux2.Flux2Modulation`                                               | 1017-1037        | EXACT MATCH (incl. split)                       |

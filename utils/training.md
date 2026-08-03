@@ -18,7 +18,7 @@
 
 ### Line-by-Line Mapping
 
-| minFLUX symbol | Canonical Source | Source Lines | Verdict |
+| toyFLUX symbol | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
 | `_compute_density_for_timestep_sampling` | `training_utils.compute_density_for_timestep_sampling` | 360-384 | MATCH |
 | `_compute_loss_weighting_for_sd3` | `training_utils.compute_loss_weighting_for_sd3` | 387-402 | EXACT MATCH |
@@ -26,4 +26,4 @@
 | `sample_flow_match_noise` | Composed from `_compute_density_for_timestep_sampling` + `_get_sigmas` + flow interpolation | — | Wraps the 3 primitives above into one call: returns `(noisy_input, noise, sigmas, timesteps)` |
 | `flow_match_loss_step` | Composed from `_compute_loss_weighting_for_sd3` + MSE on velocity target + Accelerate optimizer step | — | Wraps loss + backward + clip + step into one call: returns `loss.item()` |
 | `euler_step` | `flux_sampling.denoise` (inner step) | 115-116 | EXACT MATCH (`sample + (sigma_next - sigma) * model_output`) |
-| `train_loop` | N/A (minFLUX utility) | — | Shared Accelerate training loop; takes a `step_fn(batch) -> float` closure |
+| `train_loop` | N/A (toyFLUX utility) | — | Shared Accelerate training loop; takes a `step_fn(batch) -> float` closure |

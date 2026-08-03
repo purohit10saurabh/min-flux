@@ -87,7 +87,7 @@ flowchart TD
 
 ### Line-by-Line Mapping
 
-| minFLUX class | Canonical Source | Source Lines | Verdict |
+| toyFLUX class | Canonical Source | Source Lines | Verdict |
 |----------------|------------------|--------------|---------|
 | `TextProjection` | `embeddings.PixArtAlphaTextProjection` | 2191-2217 | MATCH (act_fn="silu" hardcoded) |
 | `FluxTimestepEmbedding` | `embeddings.CombinedTimestepGuidanceTextProjEmbeddings` | 1603-1624 | MATCH (merged guidance/no-guidance variants) |
